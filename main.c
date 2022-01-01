@@ -1,0 +1,971 @@
+/* Simple HTTP Server Example
+
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
+
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
+#include "sdkconfig.h"
+#include <esp_wifi.h>
+#include <esp_event.h>
+#include <esp_log.h>
+#include <esp_system.h>
+#include <nvs_flash.h>
+#include <sys/param.h>
+#include "nvs_flash.h"
+#include "esp_netif.h"
+#include "esp_eth.h"
+#include "protocol_examples_common.h"
+#include "esp_tls_crypto.h"
+#include <esp_http_server.h>
+
+
+#include "esp_err.h"
+#include "driver/ledc.h"
+//FFT
+#include "fft.c"
+#include <math.h>
+
+//#include "freertos/semphr.h"
+#include <stdio.h>
+
+#include "driver/rmt.h"
+#include "led_strip.h"
+
+#include <string.h>
+#include <sys/param.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_netif.h"
+#include "protocol_examples_common.h"
+
+#include "lwip/err.h"
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
+#include <lwip/netdb.h>
+#include "addr_from_stdin.h"
+
+//i2s audio sample
+#include "driver/i2s.h"
+#include "freertos/queue.h"
+
+
+static const int i2s_num = 0; // i2s port number
+
+static const i2s_config_t i2s_config = {
+    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_ADC_BUILT_IN,
+    .sample_rate = CONFIG_BI2C_SAMPLE_RATE,
+    .bits_per_sample = 16, //max 12 bits
+    .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
+    .intr_alloc_flags = 0, // default interrupt priority
+    .dma_desc_num = 8,
+    .dma_frame_num = CONFIG_BI2C_NUM_SAMPLES,
+    .use_apll = false
+};
+
+//RGB LED TWO DEFINES
+#define LOOKBACK_LED 1
+
+#define RMT_TX_CHANNEL RMT_CHANNEL_0
+
+#define EXAMPLE_CHASE_SPEED_MS (100)
+
+
+#define LEDC_HS_TIMER          LEDC_TIMER_0
+#define LEDC_HS_MODE           LEDC_HIGH_SPEED_MODE
+#define LEDC_HS_CH0_GPIO       (18)
+#define LEDC_HS_CH0_CHANNEL    LEDC_CHANNEL_0
+#define LEDC_HS_CH1_GPIO       (19)
+#define LEDC_HS_CH1_CHANNEL    LEDC_CHANNEL_1
+
+#define LEDC_LS_TIMER          LEDC_TIMER_1
+#define LEDC_LS_MODE           LEDC_LOW_SPEED_MODE
+
+
+#define LEDC_TEST_CH_NUM       (2)
+#define LEDC_TEST_DUTY         (4000)
+#define LEDC_TEST_FADE_TIME    (3000)
+
+/*static bool cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *user_arg)
+{
+    portBASE_TYPE taskAwoken = pdFALSE;
+
+    if (param->event == LEDC_FADE_END_EVT) {
+        SemaphoreHandle_t counting_sem = (SemaphoreHandle_t) user_arg;
+        xSemaphoreGiveFromISR(counting_sem, &taskAwoken);
+    }
+
+    return (taskAwoken == pdTRUE);
+}
+*/
+
+#define HOST_IP_ADDR ""//broadcast local ipv4 for your router
+#define  CONFIG_EXAMPLE_IPV4
+
+#define PORT //magic packet wake port usually 9
+
+
+/* A simple example that demonstrates how to create GET and POST
+ * handlers for the web server.
+ */
+
+static const char *TAG = "example";
+
+char setting1 = 'a';
+//No comments since this is just mashing two espressif example programs together http_server for WAN control(home routers often do not act as broadcast servers so you need a device like an RPI or ESP32) and udp_client to send the magic packet and boot 
+
+
+#if CONFIG_EXAMPLE_BASIC_AUTH
+
+typedef struct {
+    char    *username;
+    char    *password;
+} basic_auth_info_t;
+
+#define HTTPD_401      "401 UNAUTHORIZED"           /*!< HTTP Response 401 */
+
+static char *http_auth_basic(const char *username, const char *password)
+{
+    int out;
+    char *user_info = NULL;
+    char *digest = NULL;
+    size_t n = 0;
+    asprintf(&user_info, "%s:%s", username, password);
+    if (!user_info) {
+        ESP_LOGE(TAG, "No enough memory for user information");
+        return NULL;
+    }
+    esp_crypto_base64_encode(NULL, 0, &n, (const unsigned char *)user_info, strlen(user_info));
+
+    /* 6: The length of the "Basic " string
+     * n: Number of bytes for a base64 encode format
+     * 1: Number of bytes for a reserved which be used to fill zero
+    */
+    digest = calloc(1, 6 + n + 1);
+    if (digest) {
+        strcpy(digest, "Basic ");
+        esp_crypto_base64_encode((unsigned char *)digest + 6, n, (size_t *)&out, (const unsigned char *)user_info, strlen(user_info));
+    }
+    free(user_info);
+    return digest;
+}
+
+/* An HTTP GET handler */
+static esp_err_t basic_auth_get_handler(httpd_req_t *req)
+{
+    char *buf = NULL;
+    size_t buf_len = 0;
+    basic_auth_info_t *basic_auth_info = req->user_ctx;
+
+    buf_len = httpd_req_get_hdr_value_len(req, "Authorization") + 1;
+    if (buf_len > 1) {
+        buf = calloc(1, buf_len);
+        if (!buf) {
+            ESP_LOGE(TAG, "No enough memory for basic authorization");
+            return ESP_ERR_NO_MEM;
+        }
+
+        if (httpd_req_get_hdr_value_str(req, "Authorization", buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found header => Authorization: %s", buf);
+        } else {
+            ESP_LOGE(TAG, "No auth value received");
+        }
+
+        char *auth_credentials = http_auth_basic(basic_auth_info->username, basic_auth_info->password);
+        if (!auth_credentials) {
+            ESP_LOGE(TAG, "No enough memory for basic authorization credentials");
+            free(buf);
+            return ESP_ERR_NO_MEM;
+        }
+
+        if (strncmp(auth_credentials, buf, buf_len)) {
+            ESP_LOGE(TAG, "Not authenticated");
+            httpd_resp_set_status(req, HTTPD_401);
+            httpd_resp_set_type(req, "application/json");
+            httpd_resp_set_hdr(req, "Connection", "keep-alive");
+            httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"Hello\"");
+            httpd_resp_send(req, NULL, 0);
+        } else {
+            ESP_LOGI(TAG, "Authenticated!");
+            char *basic_auth_resp = NULL;
+            httpd_resp_set_status(req, HTTPD_200);
+            httpd_resp_set_type(req, "application/json");
+            httpd_resp_set_hdr(req, "Connection", "keep-alive");
+            asprintf(&basic_auth_resp, "{\"authenticated\": true,\"user\": \"%s\"}", basic_auth_info->username);
+            if (!basic_auth_resp) {
+                ESP_LOGE(TAG, "No enough memory for basic authorization response");
+                free(auth_credentials);
+                free(buf);
+                return ESP_ERR_NO_MEM;
+            }
+            httpd_resp_send(req, basic_auth_resp, strlen(basic_auth_resp));
+            free(basic_auth_resp);
+        }
+        free(auth_credentials);
+        free(buf);
+    } else {
+        ESP_LOGE(TAG, "No auth header received");
+        httpd_resp_set_status(req, HTTPD_401);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_set_hdr(req, "Connection", "keep-alive");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"Hello\"");
+        httpd_resp_send(req, NULL, 0);
+    }
+
+    return ESP_OK;
+}
+
+static httpd_uri_t basic_auth = {
+    .uri       = "/basic_auth",
+    .method    = HTTP_GET,
+    .handler   = basic_auth_get_handler,
+};
+
+static void httpd_register_basic_auth(httpd_handle_t server)
+{
+    basic_auth_info_t *basic_auth_info = calloc(1, sizeof(basic_auth_info_t));
+    if (basic_auth_info) {
+        basic_auth_info->username = CONFIG_EXAMPLE_BASIC_AUTH_USERNAME;
+        basic_auth_info->password = CONFIG_EXAMPLE_BASIC_AUTH_PASSWORD;
+
+        basic_auth.user_ctx = basic_auth_info;
+        httpd_register_uri_handler(server, &basic_auth);
+    }
+}
+#endif
+
+/* An HTTP GET handler */
+static esp_err_t hello_get_handler(httpd_req_t *req)
+{
+    char*  buf;
+    size_t buf_len;
+
+    /* Get header value string length and allocate memory for length + 1,
+     * extra byte for null termination */
+    buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
+    if (buf_len > 1) {
+        buf = malloc(buf_len);
+        /* Copy null terminated value string into buffer */
+        if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found header => Host: %s", buf);
+        }
+        free(buf);
+    }
+
+    buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-2") + 1;
+    if (buf_len > 1) {
+        buf = malloc(buf_len);
+        if (httpd_req_get_hdr_value_str(req, "Test-Header-2", buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found header => Test-Header-2: %s", buf);
+        }
+        free(buf);
+    }
+
+    buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-1") + 1;
+    if (buf_len > 1) {
+        buf = malloc(buf_len);
+        if (httpd_req_get_hdr_value_str(req, "Test-Header-1", buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found header => Test-Header-1: %s", buf);
+        }
+        free(buf);
+    }
+
+    /* Read URL query string length and allocate memory for length + 1,
+     * extra byte for null termination */
+    buf_len = httpd_req_get_url_query_len(req) + 1;
+    if (buf_len > 1) {
+        buf = malloc(buf_len);
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Found URL query => %s", buf);
+            char param[32];
+            /* Get value of expected key from query string */
+            if (httpd_query_key_value(buf, "query1", param, sizeof(param)) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => query1=%s", param);
+            }
+            if (httpd_query_key_value(buf, "query3", param, sizeof(param)) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => query3=%s", param);
+            }
+            if (httpd_query_key_value(buf, "query2", param, sizeof(param)) == ESP_OK) {
+                ESP_LOGI(TAG, "Found URL query parameter => query2=%s", param);
+            }
+        }
+        free(buf);
+    }
+
+    /* Set some custom headers */
+    httpd_resp_set_hdr(req, "Custom-Header-1", "Custom-Value-1");
+    httpd_resp_set_hdr(req, "Custom-Header-2", "Custom-Value-2");
+
+    /* Send response with custom headers and body set as the
+     * string passed in user context*/
+    const char* resp_str = (const char*) req->user_ctx;
+    httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+    /* After sending the HTTP response the old HTTP request
+     * headers are lost. Check if HTTP request headers can be read now. */
+    if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
+        ESP_LOGI(TAG, "Request headers lost");
+    }    
+
+    time_t cur = time(NULL);
+
+
+
+    if(1)
+    {
+        printf("boot time was <20\n");
+        //xTaskCreate(udp_client_task, "udp_client", 4096, NULL, 5, NULL);
+        
+    }
+    else
+    {
+        printf("no boot time was >20\n");
+    }
+    //boot_last_time = (long int)cur;
+    return ESP_OK;
+}
+
+static const httpd_uri_t hello = {
+    .uri       = "/hello",
+    .method    = HTTP_GET,
+    .handler   = hello_get_handler,
+    /* Let's pass response string in user
+     * context to demonstrate it's usage */
+    .user_ctx  = "<!DOCTYPE html><style>@import url(\'https://fonts.googleapis.com/css?family=Barlow|Patua+One\');\n\t\tdiv{\n\t\t\t  display: block;\n  margin-left: auto;\n  margin-right: auto;\n  width: 50%;\n\t\t}\n figure{\n\t display:inline-block;\n\t width:10vw;\n\t height:20vw;\n\t margin:0;\n\t padding:0;\n\t vertical-align: middle\n }\n figcaption{\n\t\tdisplay:inline-block;\n\t\theight:2vw;\n }\n\t\t*{\n\t\t\tmargin:0;\n\t\t\tpadding:0;\n\t\t\tborder-width:0;\n\t\t}\n\t\tnav{\n\t\t\tposition:fixed;\n\t\t\tleft:0;\n\t\t\ttop:0;\n\t\t\theight:5vh;\n\t\t\twidth:100vw;\n\t\t\tbackground-color:black;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-color:#97f26a;\n\t\t\tborder-width:.4vh;\n\t\t}\n\t\tnav ul{\n\t\t\tlist-style-type:none;\n\t\t\tline-height:5vh;\n\t\t\tmargin:0;\n\t\t\twidth:100vw;\n\t\t\tfont-size:1em;\n\t\t}\n\t\tnav ul li{\n\t\t\tdisplay:inline-block;\n\t\t\ttext-align:center;\n\t\t\tfloat:left;\n\t\t\tmargin:0;\n\t\t}\n\t\tnav ul li a{\n\t\t\tdisplay:inline-block;\n\t\t\tcolor:white;\n\t\t\ttext-decoration:none;\n\t\t\twidth:10vw;\n\t\t\theight:5vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\tfont-size:1em;\n\t\t}\n\t\tnav ul li a:hover{\n\t\t\tbackground-color:grey;\n\t\t/*\tborder-top-style:outset;*/\n\t\t\tborder-top-width:1vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-bottom-width:.4vh;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t}\n\t\tnav ul li p{\n\t\t\tdisplay:inline-block;\n\t\t\tcolor:white;\n\t\t\ttext-decoration:none;\n\t\t\twidth:20vw;\n\t\t\theight:5vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\tfont-size:2em;\n\t\t}\n\t\tnav ul li:last-child\n\t\t{\n\t\t\tfloat:right;\n\t\t\tmargin-right:7vw;\n\t\t}\n\t\th1{\n\t\t\tmargin-top:3vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\ttext-align:center;\n\t\t\tfont-size:5em;\n\t\t\twidth:50vw;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\th2{\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\twidth:50vw;\n\t\t\tfont-size:2em;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\th3{\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\twidth:50vw;\n\t\t\tfont-size:1.2em;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\tiframe + a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\th2 + a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\tbody > a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\tp{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t}\n\t\tol{\n\t\t\tfont-family:\'Barlow\', sans-serif;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\tlist-style-type:circle;\n\t\t}\n\t\tli{\n\t\t\tmargin-top:.6vh;\n\t\t}\n\t\t\n\t\timg{\n\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\t.iframeS{\n\t\t\twidth:320;\n\t\t\theight:180;\n\t\t}\n\t\tiframe{\n\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\tvideo{\n\t\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\ttable{\n\t\t\tborder-collapse:collapse;\n\t\t\tmargin:3vh auto;\n\t\t\tuser-select:none;\n\t\t}\n\t\ttd,th{\n\t\t\tborder: .3vh solid black;\n\t\t\ttext-align: left;\n\t\t\tpadding: 1vh;\n\t\t\tfont-family:Verdana;\n\t\t}\n\t\tth{\n\t\t\tcolor:white;\n\t\t\tbackground-color:#97f26a;\t\t\n\t\t}\n\n\t\tbody:not(nav){\n\t\t\tposition:relative;\n\t\t\ttop:7vh;\n\t\t}\n\t\t#active{\n\t\t\tbackground-color:#0066ff;\n\t\t}\n\t\t#active:hover{\n\t\t\tbackground-color:#6699ff;\n\t\t}\n\t\t.ordered{\n\t\t\tlist-style-type:lower-alpha;\n\t\t}\n\t\t.imgS{\n\t\t\twidth:10vw;\n\t\t\theight:10vw;\n\t\t}\n\t\tli .imgS{\n\t\tdisplay:inline;\n\t\t\tmargin-top:3vh ;\n\t\t\tmargin-bottom:3vh;\n\t\t\tmargin-left:auto;\n\t\t\tmargin-right:auto;\n\t\t\twidth:10vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\n</style>\n<script></script>\n\n<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css\">\n<link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\">\n<head>\n\t<title>Ben Schreyer\'s Portfolio</title>\n</head>\n<body>\n\t<h1>Welcome To My Website!</h1>\n\t<p>I am currently a student in highschool, hoping to go into applied technology. On other pages you will find various projects i have done in the past years with electronics and programming.</p>\n\t<a href = \"https://www.youtube.com/channel/UC6k-k9z7YcCYkFOxcnORFsw\">Youtube Video Demos</a>\n\t<nav>\n\t\t<ul>\n\t\t\t<li>\n\t\t\t\t<a href=\"index.html\" id=\"active\"><i class=\"fa fa-home\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a href=\"showcase.html\">Showcase</a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a href=\"links.html\">Links</a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a href=\"tutoring.html\">Tutoring</a>\n\t\t\t</li>\n\t\t\t\n\t\t\t<li>\n\t\t\t\t<p>benschreyer.net</a>\n\t\t\t</li>\n\t\t</ul>\n\t</nav>\n    <form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n        <label for =\"fname\">First nameL</label><input type = \"text\" id = \"fname\" name = \"fname\">\n        <label for =\"lname\">Last nameL</label><input type = \"text\" id = \"lname\" name = \"lname\">\n        <input type = \"submit\" value = \"Submit\">\n    </form>\n    <iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n</body>\n"
+};
+
+/* An HTTP POST handler */
+static esp_err_t echo_post_handler(httpd_req_t *req)
+{
+    char buf[100];
+    int ret, remaining = req->content_len;
+
+    while (remaining > 0) {
+        /* Read the data for the request */
+        if ((ret = httpd_req_recv(req, buf,
+                        MIN(remaining, sizeof(buf)))) <= 0) {
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                /* Retry receiving if timeout occurred */
+                continue;
+            }
+            return ESP_FAIL;
+        }
+
+        /* Send back the same data */
+        httpd_resp_send_chunk(req, buf, ret);
+        remaining -= ret;
+
+        /* Log data received */
+        ESP_LOGI(TAG, "=========== RECEIVED DATA ==========");
+        ESP_LOGI(TAG, "%.*s", ret, buf);
+        ESP_LOGI(TAG, "====================================");
+        printf("\n\n%c ,%d\n POST\n", setting1,xPortGetCoreID());
+        setting1 = buf[1];
+    }
+
+    // End response
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+static const httpd_uri_t echo = {
+    .uri       = "/echo",
+    .method    = HTTP_POST,
+    .handler   = echo_post_handler,
+    .user_ctx  = NULL
+};
+
+/* This handler allows the custom error handling functionality to be
+ * tested from client side. For that, when a PUT request 0 is sent to
+ * URI /ctrl, the /hello and /echo URIs are unregistered and following
+ * custom error handler http_404_error_handler() is registered.
+ * Afterwards, when /hello or /echo is requested, this custom error
+ * handler is invoked which, after sending an error message to client,
+ * either closes the underlying socket (when requested URI is /echo)
+ * or keeps it open (when requested URI is /hello). This allows the
+ * client to infer if the custom error handler is functioning as expected
+ * by observing the socket state.
+ */
+esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
+{
+    if (strcmp("/hello", req->uri) == 0) {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "/hello URI is not available");
+        /* Return ESP_OK to keep underlying socket open */
+        return ESP_OK;
+    } else if (strcmp("/echo", req->uri) == 0) {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "/echo URI is not available");
+        /* Return ESP_FAIL to close underlying socket */
+        return ESP_FAIL;
+    }
+    /* For any other URI send 404 and close socket */
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Some 404 error message");
+    return ESP_FAIL;
+}
+
+/* An HTTP PUT handler. This demonstrates realtime
+ * registration and deregistration of URI handlers
+ */
+static esp_err_t ctrl_put_handler(httpd_req_t *req)
+{
+    char buf;
+    int ret;
+
+    if ((ret = httpd_req_recv(req, &buf, 1)) <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+
+    if (buf == '0') {
+        /* URI handlers can be unregistered using the uri string */
+        ESP_LOGI(TAG, "Unregistering /hello and /echo URIs");
+        httpd_unregister_uri(req->handle, "/hello");
+        httpd_unregister_uri(req->handle, "/echo");
+        /* Register the custom error handler */
+        httpd_register_err_handler(req->handle, HTTPD_404_NOT_FOUND, http_404_error_handler);
+    }
+    else {
+        ESP_LOGI(TAG, "Registering /hello and /echo URIs");
+        httpd_register_uri_handler(req->handle, &hello);
+        httpd_register_uri_handler(req->handle, &echo);
+        /* Unregister custom error handler */
+        httpd_register_err_handler(req->handle, HTTPD_404_NOT_FOUND, NULL);
+    }
+
+    /* Respond with empty body */
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+static const httpd_uri_t ctrl = {
+    .uri       = "/ctrl",
+    .method    = HTTP_PUT,
+    .handler   = ctrl_put_handler,
+    .user_ctx  = NULL
+};
+
+static httpd_handle_t start_webserver(void)
+{
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.lru_purge_enable = true;
+
+    // Start the httpd server
+    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
+    if (httpd_start(&server, &config) == ESP_OK) {
+        // Set URI handlers
+        ESP_LOGI(TAG, "Registering URI handlers");
+        httpd_register_uri_handler(server, &hello);
+        httpd_register_uri_handler(server, &echo);
+        httpd_register_uri_handler(server, &ctrl);
+        #if CONFIG_EXAMPLE_BASIC_AUTH
+        httpd_register_basic_auth(server);
+        #endif
+        return server;
+    }
+
+    ESP_LOGI(TAG, "Error starting server!");
+    return NULL;
+}
+
+static void stop_webserver(httpd_handle_t server)
+{
+    // Stop the httpd server
+    httpd_stop(server);
+}
+
+static void disconnect_handler(void* arg, esp_event_base_t event_base,
+                               int32_t event_id, void* event_data)
+{
+    httpd_handle_t* server = (httpd_handle_t*) arg;
+    if (*server) {
+        ESP_LOGI(TAG, "Stopping webserver");
+        stop_webserver(*server);
+        *server = NULL;
+    }
+}
+
+static void connect_handler(void* arg, esp_event_base_t event_base,
+                            int32_t event_id, void* event_data)
+{
+    httpd_handle_t* server = (httpd_handle_t*) arg;
+    if (*server == NULL) {
+        ESP_LOGI(TAG, "Starting webserver");
+        *server = start_webserver();
+    }
+}
+
+
+
+
+
+
+
+void ledChaseTask(void* pvParameters)
+{
+
+    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(CONFIG_EXAMPLE_RMT_TX_GPIO, RMT_TX_CHANNEL);
+    // set counter clock to 40MHz
+    config.clk_div = 2;
+
+    ESP_ERROR_CHECK(rmt_config(&config));
+    ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
+
+    led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(CONFIG_EXAMPLE_STRIP_LED_NUMBER, (led_strip_dev_t)config.channel);
+    led_strip_t *strip =  led_strip_new_rmt_ws2812(&strip_config);
+        if (!strip) {
+        ESP_LOGE(TAG, "install WS2812 driver failed");
+    }
+    // Clear LED strip (turn off all LEDs)
+    ESP_ERROR_CHECK(strip->clear(strip, 100));
+    // Show simple rainbow chasing pattern
+    ESP_LOGI(TAG, "LED Rainbow Chase Start");
+     uint32_t red = 0;
+    uint32_t green = 0;
+    uint32_t blue = 0;
+    uint16_t hue = 0;
+    uint16_t start_rgb = 0;
+    while (true) {
+        for (int i = 0; i < CONFIG_EXAMPLE_STRIP_LED_NUMBER; i++) {
+
+            ESP_ERROR_CHECK(strip->set_pixel(strip, i, 255, 100, 25));
+            // Flush RGB values to LEDs
+            ESP_ERROR_CHECK(strip->refresh(strip, 100));
+            vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+            strip->clear(strip, 50);
+            vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+            printf("%d LED NUM in TASK\n", i);
+        }
+        start_rgb += 60;
+    }
+}
+int position_to_index(int xi, int y)
+{
+    int x = (15 - xi);
+    return x * 16 + (15 - y) * (x % 2)  + y * (-1 * (x % 2 - 1));
+}
+   uint16_t i2s_b[1024];
+   float sound[1024];
+   float spectrum[1024];
+   float spectrum_avg[512];
+   int  buckets[17] = {0, 1, 2, 3, 4, 5, 6, 7, 10, 13, 18, 27, 47, 84, 166, 334, 512};
+   //int  buckets[17] = {0, 1, 2, 3, 4, 6, 8, 10, 13, 16, 28, 40, 67, 114, 196, 360, 512};
+   int colors[48] = {235,235,57,237,223,41,238,211,22,239,200,0,240,187,0,240,175,0,240,163,0,239,150,0,238,137,0,237,124,0,235,111,0,232,97,0,229,82,0,226,65,0,222,45,3,217,13,13};
+   float stack_avg[16 * LOOKBACK_LED];
+   int decay_stack[16];
+   int64_t last_decay =0;
+
+
+ 
+void drawTask(void* pvParameters)
+{
+    int first = 1;
+     rmt_config_t config = RMT_DEFAULT_CONFIG_TX(CONFIG_EXAMPLE_RMT_TX_GPIO, RMT_TX_CHANNEL);
+    // set counter clock to 40MHz
+    config.clk_div = 2;
+
+    ESP_ERROR_CHECK(rmt_config(&config));
+    ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
+
+    // install ws2812 driver
+    led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(256, (led_strip_dev_t)config.channel);
+    led_strip_t *strip = led_strip_new_rmt_ws2812(&strip_config);
+    if (!strip) {
+        ESP_LOGE(TAG, "install WS2812 driver failed");
+    }
+       for(int i =0; i < 16;i++)
+            {
+
+
+
+                    ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i,0),colors[(i)*3]/20,colors[(i)*3+1]/20,colors[(i)*3+2]/20));
+
+               
+            }
+    while(1)    
+    {
+                    struct timeval tv_now;
+            gettimeofday(&tv_now, NULL);
+            int64_t time_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
+        //printf("DRAW TASK %lld\n",time_us);
+               //ESP_ERROR_CHECK(strip->clear(strip, 10));   
+    // Clear LED strip (turn off all 
+                for(int i = 1; i < 17;i++)
+            {
+                int low_lim = first;
+                
+                for(int k = low_lim;k < 16;k++)
+                {
+                    if(k < decay_stack[i-1])
+                    {
+                    ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),colors[(i-1)*3]/20,colors[(i-1)*3+1]/20,colors[(i-1)*3+2]/20));
+                    }
+                    else
+                    {
+                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),0,0,0));
+                    }
+                }
+                first = 1;
+            }
+            ESP_ERROR_CHECK(strip->refresh(strip, 10));
+    }
+}
+void app_main(void)
+{
+
+
+    /* int ch;
+
+    
+     // Prepare and set configuration of timers
+     // that will be used by LED Controller
+     
+    ledc_timer_config_t ledc_timer = {
+        .duty_resolution = LEDC_TIMER_13_BIT, // resolution of PWM duty
+        .freq_hz = 5000,                      // frequency of PWM signal
+        .speed_mode = LEDC_LS_MODE,           // timer mode
+        .timer_num = LEDC_LS_TIMER,            // timer index
+        .clk_cfg = LEDC_AUTO_CLK,              // Auto select the source clock
+    };
+    // Set configuration of timer0 for high speed channels
+    ledc_timer_config(&ledc_timer);
+
+    // Prepare and set configuration of timer1 for low speed channels
+    ledc_timer.speed_mode = LEDC_HS_MODE;
+    ledc_timer.timer_num = LEDC_HS_TIMER;
+    ledc_timer_config(&ledc_timer);
+    ledc_channel_config_t ledc_channel[LEDC_TEST_CH_NUM] = {
+        {
+            .channel    = LEDC_HS_CH0_CHANNEL,
+            .duty       = 0,
+            .gpio_num   = LEDC_HS_CH0_GPIO,
+            .speed_mode = LEDC_HS_MODE,
+            .hpoint     = 0,
+            .timer_sel  = LEDC_HS_TIMER,
+            .flags.output_invert = 0
+        },
+        {
+            .channel    = LEDC_HS_CH1_CHANNEL,
+            .duty       = 0,
+            .gpio_num   = LEDC_HS_CH1_GPIO,
+            .speed_mode = LEDC_HS_MODE,
+            .hpoint     = 0,
+            .timer_sel  = LEDC_HS_TIMER,
+            .flags.output_invert = 0
+        },
+
+    };*/
+
+    //boot_last_time = (long int)time(NULL);
+    static httpd_handle_t server = NULL;
+
+    ESP_ERROR_CHECK(nvs_flash_init());
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+
+
+    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
+     * Read "Establishing Wi-Fi or Ethernet Connection" section in
+     * examples/protocols/README.md for more information about this function.
+     */
+    ESP_ERROR_CHECK(example_connect());
+
+    /* Register event handlers to stop the server when Wi-Fi or Ethernet is disconnected,
+     * and re-start it upon connection.
+     */
+#ifdef CONFIG_EXAMPLE_CONNECT_WIFI
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
+#endif // CONFIG_EXAMPLE_CONNECT_WIFI
+#ifdef CONFIG_EXAMPLE_CONNECT_ETHERNET
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &connect_handler, &server));
+    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ETHERNET_EVENT_DISCONNECTED, &disconnect_handler, &server));
+#endif // CONFIG_EXAMPLE_CONNECT_ETHERNET
+
+    /* Start the server for the first time */
+    printf("STARTING HTTP SERVER\n");
+    server = start_webserver();
+    printf("IS THE SERVER ON THIS CORE?\n");
+    printf("\n\n%c ,%d\n MAIN\n", setting1,xPortGetCoreID());
+    static uint8_t ucParameterToPass;
+    TaskHandle_t xHandle = NULL;
+    xTaskCreate(drawTask, "DRAWTASK", 4096, &ucParameterToPass, tskIDLE_PRIORITY + 10, &xHandle);
+
+
+    // install ws2812 driver
+
+    //strip_config = 
+
+
+
+
+
+    TaskHandle_t xHandleChase = NULL;
+    //xTaskCreate(ledChaseTask, "CHASETASK", 4096, &ucParameterToPass, tskIDLE_PRIORITY, &xHandleChase);
+
+
+
+  i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
+  i2s_set_adc_mode(ADC_UNIT_1, ADC1_CHANNEL_7);
+
+  vTaskDelay(1000); //required for stability of ADC 
+  i2s_adc_enable(i2s_num);
+  vTaskDelay(1000);
+ 
+    size_t i2s_b_read;
+    int cntr = 0;
+    fft_config_t *fft_analysis = fft_init(1024, FFT_REAL, FFT_FORWARD, &sound[0], &spectrum[0]);
+    
+
+
+    // Clear LED strip (turn off all LEDs)
+
+   
+    // Show simple rainbow chasing pattern
+    ESP_LOGI(TAG, "LED Rainbow Chase Start");
+     uint32_t red = 0;
+    uint32_t green = 0;
+    uint32_t blue = 0;
+    uint16_t hue = 0;
+    uint16_t start_rgb = 0;
+    while(1)
+    {
+
+        cntr++;
+        cntr = cntr % 48;
+
+        i2s_read(i2s_num,&i2s_b,sizeof(i2s_b),&i2s_b_read, portMAX_DELAY);
+                if(i2s_b_read > 1020)// && cntr == 987)
+        {
+            vTaskDelay(pdMS_TO_TICKS(2));
+            
+            long long unsigned int avg = 0;
+            uint16_t min_dat = 10000;
+            uint16_t max_dat = 0;
+            for(int i = 0;i < 1024;i++)
+            {
+                avg+= i2s_b[i];
+            }
+            avg = avg/1024;
+            for(int i = 0;i < 1024;i++)
+            {
+                sound[i] = ((float)(i2s_b[i] - (uint16_t)avg));
+                //printf("%.6f, ", sound[i]);
+            }
+            fft_execute(fft_analysis);
+            for(int i = 0; i < 512;i++)
+            {
+                spectrum[i] = sqrt(spectrum[2*i]*spectrum[2*i]+spectrum[2*i+1]*spectrum[2*i + 1]);
+            }
+            for(int i = 0;i < 0;i++)
+            {
+                spectrum[i] = 0.0;
+            }
+
+            //Flush RGB values to LEDs
+            //ESP_ERROR_CHECK(strip->refresh(strip, 10));
+            //vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+            //strip->clear(strip, 50);
+            //vTaskDelay(pdMS_TO_TICKS(100));
+            //ESP_ERROR_CHECK(strip->set_pixel(strip,0,255,255,255));
+            //ESP_ERROR_CHECK(strip->refresh(strip, 100));
+            //printf("%.6f\n",spectrum[max_ind]);
+            /*for(int i = 0;i < 100;i++)
+            {
+                float brt = (255.0 * (spectrum[i] / 4000000.0));
+   
+
+                //strip->set_pixel(strip,i,(uint32_t)brt,(uint32_t)brt,(uint32_t)brt);
+                //printf("%.2f\n",brt);
+            }*/
+            /*
+            if(cntr % 100 == 0)
+                printf("AVG\n");
+            for(int i = 0;i < 512;i++)
+            {
+                spectrum_avg[i] = spectrum_avg[i] + spectrum[i];
+                if(cntr % 100 == 0)
+                {
+                    printf("%0.6f, ",spectrum_avg[i]);
+                }
+            }
+            if(cntr % 100 == 0)
+                printf("END AVG\n");*/
+
+
+            //ESP_ERROR_CHECK(strip->clear(strip, 1));
+            for(int k = 0;k < 16;k++)
+            {
+                for(int i = 0;i < LOOKBACK_LED - 1;i++)
+                {
+                    stack_avg[LOOKBACK_LED * k + i + 1] = stack_avg[LOOKBACK_LED * k + i]; 
+                }
+            }
+            for(int i = 1; i < 17;i++)
+            {
+                float sum =0.0;
+                for(int j = buckets[i - 1];j < buckets[i];j++)
+                {
+                    sum+=spectrum[j + i];
+                }
+                sum = sum / 14.0;
+                float brt = (255.0 * (sum / 4000000.0)) * 6.0;
+                brt = brt * brt / 14.0;
+                //printf("%.6f STACK: %d\n",brt, i);
+                
+                if(brt < 0.1)
+                {
+                    brt = 0.01;
+                }
+                float avg_s = 0.0;
+                float max = 0.0;
+                int max_in = 0;
+                stack_avg[i * LOOKBACK_LED] = brt;
+                for(int h = 0;h < LOOKBACK_LED;h++)
+                {
+                    avg_s += stack_avg[h + i * LOOKBACK_LED];
+                    if(stack_avg[h+i * LOOKBACK_LED] > max)
+                    {
+                        max_in = h;
+                        max = stack_avg[h+i * LOOKBACK_LED];
+                    }
+                }
+                max = max - (float)max_in/(float) LOOKBACK_LED * 8.0;
+                if(i <= 4)
+                {
+                    avg_s = avg_s /2.5;
+                }
+                if(i>= 7 && i <=10)
+                {
+                    avg_s = avg_s * 2.5;
+                }
+                avg_s = avg_s / (float)LOOKBACK_LED;
+                //avg_s = max;
+                avg_s = avg_s ;//* (2.5 - (((float) i - 8.0)/6.0)*(((float) i -8.0)/6.0));
+                int stack = (int)avg_s;
+                //printf("BRT %d ____ %d\n",i, stack);
+                if(stack > 16)
+                {
+                    stack = 16;
+                }
+                if(stack < 1)
+                {
+                    stack = 1;
+                }
+                if(decay_stack[i - 1] < stack)
+                {
+                    decay_stack[i-1] = stack;
+                }
+        }
+        //IF IS BLOCKED
+
+            
+            //strip->set_pixel(strip, position_to_index(15,6),250,0,0);
+            struct timeval tv_now;
+            gettimeofday(&tv_now, NULL);
+            int64_t time_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
+            if(time_us - last_decay > 30000)
+            {
+                last_decay = time_us;
+                for(int i = 0;i < 16;i++)
+                {
+                    if(decay_stack[i] > 0)
+                    {
+                        decay_stack[i] = decay_stack[i] - 1;
+                    }
+                }
+            }
+                //
+
+    }
+            /*for(int x =0; x  <16;x++)
+            {
+                for (int y = 0;y < 16;y++)
+                {
+                    ESP_ERROR_CHECK(strip->clear(strip, 100));
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                    ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(x,y),255,255,255));
+                    ESP_ERROR_CHECK(strip->refresh(strip, 100));
+                    printf("%d INDEX\n",position_to_index(x,y));
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                }
+            }
+            //ESP_ERROR_CHECK(strip->set_pixel(strip, max_ind, 255, 100, 25));
+
+            //for(int i = 0;i < 1024;i++)
+            //{
+              //  printf("%.6f, ",spectrum[i]);
+            //}
+            //printf("\n\n");
+        }
+        //vTaskDelay(1000);
+    }
+    
+    
+    
+      // Set LED Controller with previously prepared configuration
+    for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+        ledc_channel_config(&ledc_channel[ch]);
+    }
+
+    // Initialize fade service.
+    ledc_fade_func_install(0);
+    ledc_cbs_t callbacks = {
+        .fade_cb = cb_ledc_fade_end_event
+        };
+    SemaphoreHandle_t counting_sem = xSemaphoreCreateCounting(LEDC_TEST_CH_NUM, 0);
+
+    for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+        ledc_cb_register(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, &callbacks, (void *) counting_sem);
+    }
+
+    while (1) {
+        printf("1. LEDC fade up to duty = %d\n", LEDC_TEST_DUTY);
+        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+            ledc_set_fade_with_time(ledc_channel[ch].speed_mode,
+                    ledc_channel[ch].channel, LEDC_TEST_DUTY, LEDC_TEST_FADE_TIME);
+            ledc_fade_start(ledc_channel[ch].speed_mode,
+                    ledc_channel[ch].channel, LEDC_FADE_NO_WAIT);
+        }
+
+        for (int i = 0; i < LEDC_TEST_CH_NUM; i++) {
+            xSemaphoreTake(counting_sem, portMAX_DELAY);
+        }
+
+        printf("2. LEDC fade down to duty = 0\n");
+        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+            ledc_set_fade_with_time(ledc_channel[ch].speed_mode,
+                    ledc_channel[ch].channel, 0, LEDC_TEST_FADE_TIME);
+            ledc_fade_start(ledc_channel[ch].speed_mode,
+                    ledc_channel[ch].channel, LEDC_FADE_NO_WAIT);
+        }
+
+        for (int i = 0; i < LEDC_TEST_CH_NUM; i++) {
+            xSemaphoreTake(counting_sem, portMAX_DELAY);
+        }
+
+        printf("3. LEDC set duty = %d without fade\n", LEDC_TEST_DUTY);
+        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+            ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, LEDC_TEST_DUTY);
+            ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel);
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+        printf("4. LEDC set duty = 0 without fade\n");
+        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+            ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, 0);
+            ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel);
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }*/
+}
+}
