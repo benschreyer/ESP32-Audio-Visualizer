@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-<link rel="stylesheet" type="text/css" href="style.css">
+<link rel="stylesheet" type="text/css" href="style.css?v=1">
 <head>
 	<title>LED Matrix Control</title>
 </head>
 <body>
 	<div page-name="Color_Palette">
 		<h1>Color Palette</h1>
-		<select>
+		<select id = "color_possible">
 			<option value ="def">Default</option>
 			<option value="umd">UMD</option>
+			<option value="us">U.S.</option>
+			<option value="solid">Solid</option>
 		</select>
 		<br/>
 		<form action = "/echo" target = "hiddenFrame" method = "post">
@@ -17,17 +19,20 @@
 			<div class = "colorDiv"><input  class = "colorBox" type = "color" id = "c0" name = "c0"/><input  class = "colorBox" type = "color" id = "c1" name = "c1"/><input  class = "colorBox" type = "color" id = "c2" name = "c2"/><input  class = "colorBox" type = "color" id = "c3" name = "c3"/><input  class = "colorBox" type = "color" id = "c4" name = "c4"/><input  class = "colorBox" type = "color" id = "c5" name = "c5"/><input  class = "colorBox" type = "color" id = "c6" name = "c6"/><input  class = "colorBox" type = "color" id = "c7" name = "c7"/><input  class = "colorBox" type = "color" id = "c8" name = "c8"/><input  class = "colorBox" type = "color" id = "c9" name = "c9"/><input  class = "colorBox" type = "color" id = "c10" name = "ca"/><input  class = "colorBox" type = "color" id = "cv" name = "cs"/><input  class = "colorBox" type = "color" id = "c12" name = "cd"/><input  class = "colorBox" type = "color" id = "sdc" name = "cf"/><input  class = "colorBox" type = "color" id = "cg" name = "cg"/><input  class = "colorBox" type = "color" id = "cj" name = "cp"/></div>
 
 			
-			<button type = "submit"><i class = "fa fa-paper-plane"></i></button>
+			<button onclick =submitForm ontouchstart=submitForm><i class = "fa fa-paper-plane"></i></button>
 		</form>
 		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
 	</div>
 
 	<div page-name="Animation_Settings">
 		<h1>Animation Settings</h1>
-		<form action = "/echo" target = "hiddenFrame" method = "post">
-			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
-			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
 
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<input class = "hidden" type="text" name = "submit_type" value ="settings_set" display="none"/>
+			<div class = "settingBackground"><label for ="sensitivity">Sensitivity</label><input type = "range" min = "0" max = "9" step = "1" id = "sensitivity" name = "sensitivity" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="brightness">Brightness</label><input type = "range" min = "0" max = "9" step = "1"  d = "brightness" name = "brightness" class = "rangeSlider"></div>
+
+			<button onclick =submitForm ontouchstart=submitForm><i class = "fa fa-paper-plane"></i></button>
 		</form>
 		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
 	</div>
@@ -79,7 +84,7 @@
 			</li>
 			<li>
 				<a page-name = "API_Based" class = "nav-button"><i class="fa fa-cloud"></i></a>
-			</li>
+			</li> 
 			
 
 
@@ -89,11 +94,100 @@
 		</ul>
 	</nav>
 	<script>
+
+		var umd = ["#c17d11",  
+"#c17d11",  
+"#555753",  
+"#555753",  
+"#a40000",  
+"#a40000",  
+"#eeeeec",  
+"#eeeeec",  
+"#c17d11",  
+"#c17d11",  
+"#555753",  
+"#555753",  
+"#a40000",  
+"#a40000", 
+"#eeeeec", 
+"#eeeeec",]
+
+		var default_color = ["#5c3566",  
+"#a900ff",  
+"#5100ff",  
+"#204a87",  
+"#00b1ff",  
+"#c17d11",  
+"#c4a000",  
+"#eeeeec",  
+"#555753",  
+"#73d216",  
+"#4e9a06",  
+"#f57900",  
+"#ce5c00",  
+"#b55151",  
+"#ef2929",  
+"#a40000"];
+
+		var us = [
+		"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",
+		]
+		function colorUpdate(e)
+		{
+			var choice = e.srcElement.value;
+			var arr = [];
+			if(choice === "umd")
+			{
+				arr = umd;
+			}
+			if(choice === "def")
+			{
+				arr = default_color;
+				//console.log("DEF");
+			}
+			if(choice=== "us")
+			{
+				arr = us;
+			}
+			if(choice ==="solid")
+			{
+				var cb = document.getElementsByClassName("colorDiv")[0].children;
+			for(var i = 0;i < 16;i++)
+			{
+				cb[i].value = cb[0].value;
+			}
+				return;
+			}
+			var cb = document.getElementsByClassName("colorDiv")[0].children;
+			for(var i = 0;i < 16;i++)
+			{
+				cb[i].value = arr[i];
+			}
+		}
+
 		function getElementByAttribute(attribute, value)
 		{
 			return document.querySelectorAll("[" + attribute + "=" + value + "]")[0];
 		}
-
+		function submitForm(e)
+		{
+			e.srcElement.parentNode.submit();
+		}
 		function navClick(e)
 		{
 			var old = document.getElementById("active");
@@ -126,6 +220,9 @@
 			navA[i].addEventListener("click",navClick);
 			navA[i].click();
 		}
-		
+		document.getElementById("color_possible").addEventListener("change",colorUpdate);
+		var e = {};
+		e.srcElement = document.getElementById("color_possible");
+		colorUpdate(e)
 	</script>
 </body>
