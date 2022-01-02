@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="style.css">
+<head>
+	<title>LED Matrix Control</title>
+</head>
+<body>
+	<div page-name="Color_Palette">
+		<h1>Color Palette</h1>
+		<select>
+			<option value ="def">Default</option>
+			<option value="umd">UMD</option>
+		</select>
+		<br/>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<input class = "hidden" type="text" name = "submit_type" value ="color_set" display="none"/>
+			<div class = "colorDiv"><input  class = "colorBox" type = "color" id = "c0" name = "c0"/><input  class = "colorBox" type = "color" id = "c1" name = "c1"/><input  class = "colorBox" type = "color" id = "c2" name = "c2"/><input  class = "colorBox" type = "color" id = "c3" name = "c3"/><input  class = "colorBox" type = "color" id = "c4" name = "c4"/><input  class = "colorBox" type = "color" id = "c5" name = "c5"/><input  class = "colorBox" type = "color" id = "c6" name = "c6"/><input  class = "colorBox" type = "color" id = "c7" name = "c7"/><input  class = "colorBox" type = "color" id = "c8" name = "c8"/><input  class = "colorBox" type = "color" id = "c9" name = "c9"/><input  class = "colorBox" type = "color" id = "c10" name = "ca"/><input  class = "colorBox" type = "color" id = "cv" name = "cs"/><input  class = "colorBox" type = "color" id = "c12" name = "cd"/><input  class = "colorBox" type = "color" id = "sdc" name = "cf"/><input  class = "colorBox" type = "color" id = "cg" name = "cg"/><input  class = "colorBox" type = "color" id = "cj" name = "cp"/></div>
+
+			
+			<button type = "submit"><i class = "fa fa-paper-plane"></i></button>
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<div page-name="Animation_Settings">
+		<h1>Animation Settings</h1>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
+			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
+
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+
+	<div page-name="Display_Image">
+		<h1>Display Image</h1>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
+			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
+			<input type = "submit" value = "Submit">
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<div page-name="Scroll_Text">
+		<h1>Scroll Text</h1>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
+			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
+			<input type = "submit" value = "Submit">
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<div page-name="API_Based">
+		<h1>API Based</h1>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
+			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
+			<input type = "submit" value = "Submit">
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<nav>
+		<ul>
+			<li>
+				<a id="active" page-name = "Color_Palette" class = "nav-button"><i class="fa fa-paint-brush"></i></a>
+			</li>
+			<li>
+				<a page-name = "Animation_Settings" class = "nav-button"><i class="fa fa-cog"></i></a>
+			</li>
+			<li>
+				<a page-name = "Display_Image" class = "nav-button"><i class="fa fa-file-image-o"></i></a>
+			</li>
+			<li>
+				<a page-name = "Scroll_Text" class = "nav-button"><i class="fa fa-file-text-o"></i></a>
+			</li>
+			<li>
+				<a page-name = "API_Based" class = "nav-button"><i class="fa fa-cloud"></i></a>
+			</li>
+			
+
+
+			<li>
+				<p id = "Page_Text">Color Palette</a>
+			</li>
+		</ul>
+	</nav>
+	<script>
+		function getElementByAttribute(attribute, value)
+		{
+			return document.querySelectorAll("[" + attribute + "=" + value + "]")[0];
+		}
+
+		function navClick(e)
+		{
+			var old = document.getElementById("active");
+			old.id = null;
+			console.log(e.srcElement.parentNode);
+			console.log(e.srcElement);
+			var properSource;
+			if(e.srcElement.tagName === "A")
+			{
+				properSource = e.srcElement;
+
+			}
+			else
+			{
+				properSource = e.srcElement.parentNode;
+
+			}
+
+			properSource.id = "active";
+
+			getElementByAttribute("page-name",old.getAttribute("page-name")).style.display = "none";
+			getElementByAttribute("page-name",properSource.getAttribute("page-name")).style.display = "block";
+
+			
+		}
+
+		navA = document.getElementsByClassName("nav-button");
+		for(var i =  navA.length - 1;i >= 0;i--)
+		{
+			navA[i].addEventListener("click",navClick);
+			navA[i].click();
+		}
+		
+	</script>
+</body>
