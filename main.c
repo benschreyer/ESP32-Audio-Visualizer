@@ -695,7 +695,7 @@ void drawTask(void* pvParameters)
             {
 
 
-                    float brt = ((float) brightness )/ 5.0 / 20.0;
+                    float brt = ((float) brightness )/ 1.0 / 20.0;
                     int r = (int)(colors[(i)*3] * brt);
                     int g = (int)(colors[(i)*3 + 1] * brt);
                     int b = (int)(colors[(i)*3+ 2] * brt);
@@ -1035,7 +1035,7 @@ void app_main(void)
                 }
                 sum = sum / 14.0;
                 float brt = (255.0 * (sum / 4000000.0)) * 6.0;
-                brt = brt * brt / 14.0 * sensitivity / 5.0;
+                brt = 5.0*brt * brt / 14.0 * sensitivity / 5.0;
                 //printf("%.6f STACK: %d\n",brt, i);
                 
                 if(brt < 0.1)
