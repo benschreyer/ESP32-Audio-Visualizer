@@ -29,8 +29,9 @@
 
 		<form action = "/echo" target = "hiddenFrame" method = "post">
 			<input class = "hidden" type="text" name = "submit_type" value ="settings_set" display="none"/>
-			<div class = "settingBackground"><label for ="sensitivity">Sensitivity</label><input type = "range" min = "0" max = "9" step = "1" id = "sensitivity" name = "sensitivity" class = "rangeSlider"></div>
-			<div class = "settingBackground"><label for ="brightness">Brightness</label><input type = "range" min = "0" max = "9" step = "1"  d = "brightness" name = "brightness" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="sensitivity">Sensitivity</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" id = "sensitivity" name = "sensitivity" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="brightness">Brightness</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" d = "brightness" name = "brightness" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="relax">Drop Time</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" id= "relax" name = "relax" class = "rangeSlider"></div>
 
 			<button onclick =submitForm ontouchstart=submitForm><i class = "fa fa-paper-plane"></i></button>
 		</form>
