@@ -669,7 +669,10 @@ int position_to_index(int xi, int y)
    float sound[1024];
    float spectrum[1024];
    float spectrum_avg[512];
-   int  buckets[17] = {0, 1, 2, 3, 4, 5, 6, 7, 10, 13, 18, 27, 47, 84, 166, 334, 512};
+   int buckets[17] = {1, 2, 3, 4, 5, 6, 7, 9, 13, 23, 46, 90, 148, 208, 268, 350,512};
+   //int buckets[17] = {7, 9, 14, 21, 33, 53, 78, 106, 135, 166, 196, 226, 257, 292, 335, 397,512};
+   //int buckets[17] = {1, 2, 3, 4, 5, 6, 7, 13, 25, 51, 93, 139, 187, 234, 286, 358, 512};
+   //int  buckets[17] = {0, 1, 2, 3, 4, 5, 6, 7, 10, 13, 18, 27, 47, 84, 166, 334, 512};
    //int  buckets[17] = {0, 1, 2, 3, 4, 6, 8, 10, 13, 16, 28, 40, 67, 114, 196, 360, 512};
    
    float stack_avg[16 * LOOKBACK_LED];
@@ -934,7 +937,7 @@ void app_main(void)
 
 
   i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
-  i2s_set_adc_mode(ADC_UNIT_1, ADC1_CHANNEL_7);
+  i2s_set_adc_mode(ADC_UNIT_1, ADC1_CHANNEL_5);
 
   vTaskDelay(1000); //required for stability of ADC 
   i2s_adc_enable(i2s_num);
@@ -956,11 +959,13 @@ void app_main(void)
     uint32_t blue = 0;
     uint16_t hue = 0;
     uint16_t start_rgb = 0;
+
+    int decay_cnt = 0;
     while(1)
     {
 
         cntr++;
-        cntr = cntr % 48;
+        cntr = cntr % 10000;
 
         i2s_read(i2s_num,&i2s_b,sizeof(i2s_b),&i2s_b_read, portMAX_DELAY);
                 if(i2s_b_read > 1020)// && cntr == 987)
@@ -984,6 +989,7 @@ void app_main(void)
             for(int i = 0; i < 512;i++)
             {
                 spectrum[i] = sqrt(spectrum[2*i]*spectrum[2*i]+spectrum[2*i+1]*spectrum[2*i + 1]);
+                //spectrum_avg[i] = spectrum_avg[i] + spectrum[i];
             }
             for(int i = 0;i < 0;i++)
             {
@@ -1007,17 +1013,17 @@ void app_main(void)
                 //printf("%.2f\n",brt);
             }*/
             /*
-            if(cntr % 100 == 0)
+            if(cntr % 5000 == 0)
                 printf("AVG\n");
             for(int i = 0;i < 512;i++)
             {
                 spectrum_avg[i] = spectrum_avg[i] + spectrum[i];
-                if(cntr % 100 == 0)
+                if(cntr % 5000 == 0)
                 {
                     printf("%0.6f, ",spectrum_avg[i]);
                 }
             }
-            if(cntr % 100 == 0)
+            if(cntr % 5000 == 0)
                 printf("END AVG\n");*/
 
 
@@ -1037,8 +1043,8 @@ void app_main(void)
                     sum+=spectrum[j + i];
                 }
                 sum = sum / 14.0;
-                float brt = (255.0 * (sum / 4000000.0)) * 6.0;
-                brt = 5.0*brt * brt / 14.0 * pow(1.5,sensitivity) / 5.0;
+                float brt = (255.0 * (sum / 4000000.0)) * 18.0;
+                brt = 5.0*brt * brt / 190.0 * pow(1.5,sensitivity);
                 //printf("%.6f STACK: %d\n",brt, i);
                 
                 if(brt < 0.1)
@@ -1059,21 +1065,31 @@ void app_main(void)
                     }
                 }
                 max = max - (float)max_in/(float) LOOKBACK_LED * 8.0;
-                if(i <= 4)
+              
+ 
+
+                /*
+                  if(i <= 4)
                 {
                     avg_s = avg_s /2.5;
-                }
-                if(i>=4 && i <=6)
-                {
-                    avg_s = avg_s * 2.5;
                 }
                 if(i>= 7 && i <=10)
                 {
                     avg_s = avg_s * 2.5;
-                }
+                }*/
                 avg_s = avg_s / (float)LOOKBACK_LED;
                 //avg_s = max;
-                avg_s = avg_s ;//* (2.5 - (((float) i - 8.0)/6.0)*(((float) i -8.0)/6.0));
+                avg_s = avg_s ;// (2.5 - (((float) i - 8.0)/6.0)*(((float) i -8.0)/6.0));
+                if(i == 1)
+                {
+                    avg_s/=3.0;
+                }
+                if(5 <= i && i <= 8)
+                {
+                    avg_s*=3.0;
+                }
+
+
                 int stack = (int)avg_s;
                 //printf("BRT %d ____ %d\n",i, stack);
                 if(stack > 16)
@@ -1096,15 +1112,24 @@ void app_main(void)
             struct timeval tv_now;
             gettimeofday(&tv_now, NULL);
             int64_t time_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
+            
             if(time_us - last_decay >  drop * 3000)
             {
+                decay_cnt++;
+                decay_cnt%=400;
                 last_decay = time_us;
                 for(int i = 0;i < 16;i++)
                 {
-                    if(decay_stack[i] > 0)
+                    if(decay_stack[i] > 6)
                     {
                         decay_stack[i] = decay_stack[i] - 1;
                     }
+                    else if(decay_stack[i] > 0 && decay_cnt % 2 == 0)
+                    {
+                        decay_stack[i] = decay_stack[i] - 1;
+                    }
+
+                    
                 }
             }
                 //
@@ -1121,7 +1146,7 @@ void app_main(void)
                     printf("%d INDEX\n",position_to_index(x,y));
                     vTaskDelay(pdMS_TO_TICKS(200));
                 }
-            }
+            }*/
             //ESP_ERROR_CHECK(strip->set_pixel(strip, max_ind, 255, 100, 25));
 
             //for(int i = 0;i < 1024;i++)
@@ -1134,61 +1159,7 @@ void app_main(void)
     }
     
     
-    
-      // Set LED Controller with previously prepared configuration
-    for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-        ledc_channel_config(&ledc_channel[ch]);
-    }
 
-    // Initialize fade service.
-    ledc_fade_func_install(0);
-    ledc_cbs_t callbacks = {
-        .fade_cb = cb_ledc_fade_end_event
-        };
-    SemaphoreHandle_t counting_sem = xSemaphoreCreateCounting(LEDC_TEST_CH_NUM, 0);
 
-    for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-        ledc_cb_register(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, &callbacks, (void *) counting_sem);
-    }
+   
 
-    while (1) {
-        printf("1. LEDC fade up to duty = %d\n", LEDC_TEST_DUTY);
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            ledc_set_fade_with_time(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel, LEDC_TEST_DUTY, LEDC_TEST_FADE_TIME);
-            ledc_fade_start(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel, LEDC_FADE_NO_WAIT);
-        }
-
-        for (int i = 0; i < LEDC_TEST_CH_NUM; i++) {
-            xSemaphoreTake(counting_sem, portMAX_DELAY);
-        }
-
-        printf("2. LEDC fade down to duty = 0\n");
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            ledc_set_fade_with_time(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel, 0, LEDC_TEST_FADE_TIME);
-            ledc_fade_start(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel, LEDC_FADE_NO_WAIT);
-        }
-
-        for (int i = 0; i < LEDC_TEST_CH_NUM; i++) {
-            xSemaphoreTake(counting_sem, portMAX_DELAY);
-        }
-
-        printf("3. LEDC set duty = %d without fade\n", LEDC_TEST_DUTY);
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, LEDC_TEST_DUTY);
-            ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel);
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        printf("4. LEDC set duty = 0 without fade\n");
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, 0);
-            ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel);
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }*/
-}
-}
