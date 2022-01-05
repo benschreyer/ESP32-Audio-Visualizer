@@ -1,4 +1,4 @@
-ESP32 FFT
+ESP32 FFT LICENSE INCLUSION
 =========
 
 This provides a vanilla radix-2 FFT out-of-place implementation and a test example.
