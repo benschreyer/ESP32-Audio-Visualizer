@@ -120,7 +120,8 @@ static const char *TAG = "example";
 
 char setting1 = 'a';
 //No comments since this is just mashing two espressif example programs together http_server for WAN control(home routers often do not act as broadcast servers so you need a device like an RPI or ESP32) and udp_client to send the magic packet and boot 
-
+#define BUF_SIZE 1024*32
+char* buf;
 
 #if CONFIG_EXAMPLE_BASIC_AUTH
 
@@ -338,13 +339,16 @@ static const httpd_uri_t hello = {
     .handler   = hello_get_handler,
     /* Let's pass response string in user
      * context to demonstrate it's usage */
-    .user_ctx  = "<!DOCTYPE html><style>@import url(\'https://fonts.googleapis.com/css?family=Barlow|Patua+One\');\n.settingBackground\n{\n\tbackground-color: #e9e9ed;\n\tmargin-left:0;\n\tmargin-right:0;\n\twidth:50vw;\n\ttext-align: center;\n}\n\ninput[type=range] {\n\tmargin-bottom: 1vw;\n\tmargin-top: 1vw;\n\twidth:48vw;\n  }\n  input[type=range]:focus {\n\toutline: none;\n  }\n  input[type=range]::-webkit-slider-runnable-track {\n\twidth: 100%;\n\theight: 1.7vw;\n\tcursor: pointer;\n\tanimate: 0.2s;\n\n\tbackground: #bcbcbe;\n\tborder-radius: 0.3vw;\n\tborder: 0.1vw solid #000000;\n  }\n  input[type=range]::-webkit-slider-thumb {\n\n\tborder: 0.1vw solid #000000;\n\theight: 2vw;\n\twidth: 2vw;\n\tborder-radius: 0.3vw;\n\tbackground: #0066ff;;\n\tcursor: pointer;\n\t-webkit-appearance: none;\n\n  }\n  input[type=range]:focus::-webkit-slider-runnable-track {\n\tbackground: #a93085;\n  }\n  input[type=range]::-moz-range-track {\n\twidth: 100%;\n\theight: 1.7vw;\n\tcursor: pointer;\n\tanimate: 0.2s;\n\n\tbackground: #bcbcbe;\n\tborder-radius: 0.3vw;\n\tborder: 0.1vw solid #000000;\n  }\n  input[type=range]::-moz-range-thumb {\n\n\tborder: 0.1vw solid #000000;\n\theight: 2vw;\n\twidth: 2vw;\n\tborder-radius: 0.3vw;\n\tbackground: #0066ff;;\n\tcursor: pointer;\n  }\n  input[type=range]::-ms-track {\n\twidth: 100%;\n\theight: 10px;\n\tcursor: pointer;\n\tanimate: 0.2s;\n\tbackground: transparent;\n\tborder-color: transparent;\n\tcolor: transparent;\n  }\n  input[type=range]::-ms-fill-lower {\n\tbackground: #a93099;\n\tborder: 1px solid #000000;\n\tborder-radius: 10px;\n\tbox-shadow: 1px 1px 1px #000000;\n  }\n  input[type=range]::-ms-fill-upper {\n\tbackground: #a93085;\n\tborder: 1px solid #000000;\n\tborder-radius: 10px;\n\tbox-shadow: 1px 1px 1px #000000;\n  }\n  input[type=range]::-ms-thumb {\n\tbox-shadow: 1px 1px 1px #000000;\n\tborder: 1px solid #000000;\n\theight: 2vw;\n\twidth: 2vw;\n\tborder-radius: 1vw;\n\tbackground: #f01d1d;\n\tcursor: pointer;\n  }\n  input[type=range]:focus::-ms-fill-lower {\n\tbackground: #a9308b;\n  }\n  input[type=range]:focus::-ms-fill-upper {\n\tbackground: #a97f30;\n  }\n  \n\nlabel\n{\n\tfloat:left;\n\tmargin-top:auto;\n\tmargin-bottom: auto;\n\tmargin-left:0.3vw;\n\tfont-family:\'Barlow\', sans-serif;;\n\tfont-size: 2vw;\n}\n\nselect\n{\n\theight:3.125vw;\n\twidth:9.375vw;\n\tmargin-bottom: 1vw;\n\tfont-size: 2vw;\n\tfont-family:\'Barlow\', sans-serif;;\n}\nbutton\n{\n\tfont-size: 2.5vw;\n\tcolor:black;\n\twidth: 50vw;\n\theight:3.125vw;\n\tbackground-color: #97f26a;\n}\nbutton:active:hover{\n\tbackground-color: #4e8831;\n}\nbutton:hover\n{\n\tbackground-color: #7ecc56;\n}\n.hidden\n{\n\tdisplay:none;\n}\n.colorBox{\n    margin:0px;\n\tmargin-bottom: 1vw;\n    padding:0px;\n    outline:0px solid transparent;\n\twidth:3.125vw;\n\theight:3.125vw;\n}\n.colorDiv\n{\n\tmargin-left:0px;\n\tmargin-right:0px;\n\twidth:100%;\n}\n\t\tdiv{\n\t\t\t  display: block;\n\t\t\t\tmargin-left: auto;\n\t\t\t\tmargin-right: auto;\n\t\t\t\twidth: 50%;\n\t\t}\n\n figure{\n\t display:inline-block;\n\t width:10vw;\n\t height:20vw;\n\t margin:0;\n\t padding:0;\n\t vertical-align: middle\n }\n figcaption{\n\t\tdisplay:inline-block;\n\t\theight:2vw;\n }\n\t\t*{\n\t\t\tmargin:0;\n\t\t\tpadding:0;\n\t\t\tborder-width:0;\n\t\t}\n\t\tnav{\n\t\t\tposition:fixed;\n\t\t\tleft:0;\n\t\t\ttop:0;\n\t\t\theight:5vh;\n\t\t\twidth:100vw;\n\t\t\tbackground-color:black;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-color:#97f26a;\n\t\t\tborder-width:.4vh;\n\t\t}\n\t\tnav ul{\n\t\t\tlist-style-type:none;\n\t\t\tline-height:5vh;\n\t\t\tmargin:0;\n\t\t\twidth:100vw;\n\t\t\tfont-size:1em;\n\t\t}\n\t\tnav ul li{\n\t\t\tdisplay:inline-block;\n\t\t\ttext-align:center;\n\t\t\tfloat:left;\n\t\t\tmargin:0;\n\t\t}\n\t\tnav ul li a{\n\t\t\tdisplay:inline-block;\n\t\t\tcolor:white;\n\t\t\ttext-decoration:none;\n\t\t\twidth:5vh;\n\t\t\theight:5vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\tfont-size:1.5vw;\n\t\t}\n\t\tnav ul li a:hover{\n\t\t\tbackground-color:grey;\n\t\t/*\tborder-top-style:outset;*/\n\t\t\tborder-top-width:1vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-bottom-width:.4vh;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t}\n\t\tnav ul li p{\n\t\t\tdisplay:inline-block;\n\t\t\tcolor:white;\n\t\t\ttext-decoration:none;\n\t\t\twidth:20vw;\n\t\t\theight:5vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\tfont-size:2em;\n\t\t}\n\t\tnav ul li:last-child\n\t\t{\n\t\t\tfloat:right;\n\t\t\tmargin-right:7vw;\n\t\t}\n\t\th1{\n\t\t\tmargin-top:3vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\ttext-align:center;\n\t\t\tfont-size:5em;\n\t\t\twidth:50vw;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\th2{\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\twidth:50vw;\n\t\t\tfont-size:2em;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\th3{\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\twidth:50vw;\n\t\t\tfont-size:1.2em;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\tiframe + a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\th2 + a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\tbody > a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\tp{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t}\n\t\tol{\n\t\t\tfont-family:\'Barlow\', sans-serif;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\tlist-style-type:circle;\n\t\t}\n\t\tli{\n\t\t\tmargin-top:.6vh;\n\t\t}\n\t\t\n\t\timg{\n\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\t.iframeS{\n\t\t\twidth:320;\n\t\t\theight:180;\n\t\t}\n\t\tiframe{\n\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\tvideo{\n\t\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\ttable{\n\t\t\tborder-collapse:collapse;\n\t\t\tmargin:3vh auto;\n\t\t\tuser-select:none;\n\t\t}\n\t\ttd,th{\n\t\t\tborder: .3vh solid black;\n\t\t\ttext-align: left;\n\t\t\tpadding: 1vh;\n\t\t\tfont-family:Verdana;\n\t\t}\n\t\tth{\n\t\t\tcolor:white;\n\t\t\tbackground-color:#97f26a;\t\t\n\t\t}\n\n\t\tbody:not(nav){\n\t\t\tposition:relative;\n\t\t\ttop:7vh;\n\t\t}\n\t\t#active{\n\t\t\tbackground-color:#0066ff;\n\t\t}\n\t\t#active:hover{\n\t\t\tbackground-color:#6699ff;\n\t\t}\n\t\t.ordered{\n\t\t\tlist-style-type:lower-alpha;\n\t\t}\n\t\t.imgS{\n\t\t\twidth:10vw;\n\t\t\theight:10vw;\n\t\t}\n\t\tli .imgS{\n\t\tdisplay:inline;\n\t\t\tmargin-top:3vh ;\n\t\t\tmargin-bottom:3vh;\n\t\t\tmargin-left:auto;\n\t\t\tmargin-right:auto;\n\t\t\twidth:10vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\n</style>\n<script></script>\n\n<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css\">\n<link rel=\"stylesheet\" type=\"text/css\" href=\"style.css?v=1\">\n<head>\n\t<title>LED Matrix Control</title>\n</head>\n<body>\n\t<div page-name=\"Color_Palette\">\n\t\t<h1>Color Palette</h1>\n\t\t<select id = \"color_possible\">\n\t\t\t<option value =\"def\">Default</option>\n\t\t\t<option value=\"umd\">UMD</option>\n\t\t\t<option value=\"us\">U.S.</option>\n\t\t\t<option value=\"solid\">Solid</option>\n\t\t</select>\n\t\t<br/>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<input class = \"hidden\" type=\"text\" name = \"submit_type\" value =\"color_set\" display=\"none\"/>\n\t\t\t<div class = \"colorDiv\"><input  class = \"colorBox\" type = \"color\" id = \"c0\" name = \"c0\"/><input  class = \"colorBox\" type = \"color\" id = \"c1\" name = \"c1\"/><input  class = \"colorBox\" type = \"color\" id = \"c2\" name = \"c2\"/><input  class = \"colorBox\" type = \"color\" id = \"c3\" name = \"c3\"/><input  class = \"colorBox\" type = \"color\" id = \"c4\" name = \"c4\"/><input  class = \"colorBox\" type = \"color\" id = \"c5\" name = \"c5\"/><input  class = \"colorBox\" type = \"color\" id = \"c6\" name = \"c6\"/><input  class = \"colorBox\" type = \"color\" id = \"c7\" name = \"c7\"/><input  class = \"colorBox\" type = \"color\" id = \"c8\" name = \"c8\"/><input  class = \"colorBox\" type = \"color\" id = \"c9\" name = \"c9\"/><input  class = \"colorBox\" type = \"color\" id = \"c10\" name = \"ca\"/><input  class = \"colorBox\" type = \"color\" id = \"cv\" name = \"cs\"/><input  class = \"colorBox\" type = \"color\" id = \"c12\" name = \"cd\"/><input  class = \"colorBox\" type = \"color\" id = \"sdc\" name = \"cf\"/><input  class = \"colorBox\" type = \"color\" id = \"cg\" name = \"cg\"/><input  class = \"colorBox\" type = \"color\" id = \"cj\" name = \"cp\"/></div>\n\n\t\t\t\n\t\t\t<button onclick =submitForm ontouchstart=submitForm><i class = \"fa fa-paper-plane\"></i></button>\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<div page-name=\"Animation_Settings\">\n\t\t<h1>Animation Settings</h1>\n\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<input class = \"hidden\" type=\"text\" name = \"submit_type\" value =\"settings_set\" display=\"none\"/>\n\t\t\t<div class = \"settingBackground\"><label for =\"sensitivity\">Sensitivity</label><input type = \"range\" min = \"0\" max = \"9\" step = \"1\" id = \"sensitivity\" name = \"sensitivity\" class = \"rangeSlider\"></div>\n\t\t\t<div class = \"settingBackground\"><label for =\"brightness\">Brightness</label><input type = \"range\" min = \"0\" max = \"9\" step = \"1\"  d = \"brightness\" name = \"brightness\" class = \"rangeSlider\"></div>\n\t\t\t<div class = \"settingBackground\"><label for =\"relax\">Drop Time</label><input type = \"range\" min = \"0\" max = \"9\" step = \"1\"  d = \"relax\" name = \"relax\" class = \"rangeSlider\"></div>\n\n\t\t\t<button onclick =submitForm ontouchstart=submitForm><i class = \"fa fa-paper-plane\"></i></button>\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\n\t<div page-name=\"Display_Image\">\n\t\t<h1>Display Image</h1>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<label for =\"fname\">First nameL</label><input type = \"text\" id = \"fname\" name = \"fname\">\n\t\t\t<label for =\"lname\">Last nameL</label><input type = \"text\" id = \"lname\" name = \"lname\">\n\t\t\t<input type = \"submit\" value = \"Submit\">\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<div page-name=\"Scroll_Text\">\n\t\t<h1>Scroll Text</h1>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<label for =\"fname\">First nameL</label><input type = \"text\" id = \"fname\" name = \"fname\">\n\t\t\t<label for =\"lname\">Last nameL</label><input type = \"text\" id = \"lname\" name = \"lname\">\n\t\t\t<input type = \"submit\" value = \"Submit\">\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<div page-name=\"API_Based\">\n\t\t<h1>API Based</h1>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<label for =\"fname\">First nameL</label><input type = \"text\" id = \"fname\" name = \"fname\">\n\t\t\t<label for =\"lname\">Last nameL</label><input type = \"text\" id = \"lname\" name = \"lname\">\n\t\t\t<input type = \"submit\" value = \"Submit\">\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<nav>\n\t\t<ul>\n\t\t\t<li>\n\t\t\t\t<a id=\"active\" page-name = \"Color_Palette\" class = \"nav-button\"><i class=\"fa fa-paint-brush\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"Animation_Settings\" class = \"nav-button\"><i class=\"fa fa-cog\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"Display_Image\" class = \"nav-button\"><i class=\"fa fa-file-image-o\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"Scroll_Text\" class = \"nav-button\"><i class=\"fa fa-file-text-o\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"API_Based\" class = \"nav-button\"><i class=\"fa fa-cloud\"></i></a>\n\t\t\t</li> \n\t\t\t\n\n\n\t\t\t<li>\n\t\t\t\t<p id = \"Page_Text\">Color Palette</a>\n\t\t\t</li>\n\t\t</ul>\n\t</nav>\n\t<script>\n\n\t\tvar umd = [\"#c17d11\",  \n\"#c17d11\",  \n\"#555753\",  \n\"#555753\",  \n\"#a40000\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#eeeeec\",  \n\"#c17d11\",  \n\"#c17d11\",  \n\"#555753\",  \n\"#555753\",  \n\"#a40000\",  \n\"#a40000\", \n\"#eeeeec\", \n\"#eeeeec\",]\n\n\t\tvar default_color = [\"#5c3566\",  \n\"#a900ff\",  \n\"#5100ff\",  \n\"#204a87\",  \n\"#00b1ff\",  \n\"#c17d11\",  \n\"#c4a000\",  \n\"#eeeeec\",  \n\"#555753\",  \n\"#73d216\",  \n\"#4e9a06\",  \n\"#f57900\",  \n\"#ce5c00\",  \n\"#b55151\",  \n\"#ef2929\",  \n\"#a40000\"];\n\n\t\tvar us = [\n\t\t\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",\n\t\t]\n\t\tfunction colorUpdate(e)\n\t\t{\n\t\t\tvar choice = e.srcElement.value;\n\t\t\tvar arr = [];\n\t\t\tif(choice === \"umd\")\n\t\t\t{\n\t\t\t\tarr = umd;\n\t\t\t}\n\t\t\tif(choice === \"def\")\n\t\t\t{\n\t\t\t\tarr = default_color;\n\t\t\t\t//console.log(\"DEF\");\n\t\t\t}\n\t\t\tif(choice=== \"us\")\n\t\t\t{\n\t\t\t\tarr = us;\n\t\t\t}\n\t\t\tif(choice ===\"solid\")\n\t\t\t{\n\t\t\t\tvar cb = document.getElementsByClassName(\"colorDiv\")[0].children;\n\t\t\tfor(var i = 0;i < 16;i++)\n\t\t\t{\n\t\t\t\tcb[i].value = cb[0].value;\n\t\t\t}\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar cb = document.getElementsByClassName(\"colorDiv\")[0].children;\n\t\t\tfor(var i = 0;i < 16;i++)\n\t\t\t{\n\t\t\t\tcb[i].value = arr[i];\n\t\t\t}\n\t\t}\n\n\t\tfunction getElementByAttribute(attribute, value)\n\t\t{\n\t\t\treturn document.querySelectorAll(\"[\" + attribute + \"=\" + value + \"]\")[0];\n\t\t}\n\t\tfunction submitForm(e)\n\t\t{\n\t\t\te.srcElement.parentNode.submit();\n\t\t}\n\t\tfunction navClick(e)\n\t\t{\n\t\t\tvar old = document.getElementById(\"active\");\n\t\t\told.id = null;\n\t\t\tconsole.log(e.srcElement.parentNode);\n\t\t\tconsole.log(e.srcElement);\n\t\t\tvar properSource;\n\t\t\tif(e.srcElement.tagName === \"A\")\n\t\t\t{\n\t\t\t\tproperSource = e.srcElement;\n\n\t\t\t}\n\t\t\telse\n\t\t\t{\n\t\t\t\tproperSource = e.srcElement.parentNode;\n\n\t\t\t}\n\n\t\t\tproperSource.id = \"active\";\n\n\t\t\tgetElementByAttribute(\"page-name\",old.getAttribute(\"page-name\")).style.display = \"none\";\n\t\t\tgetElementByAttribute(\"page-name\",properSource.getAttribute(\"page-name\")).style.display = \"block\";\n\n\t\t\t\n\t\t}\n\n\t\tnavA = document.getElementsByClassName(\"nav-button\");\n\t\tfor(var i =  navA.length - 1;i >= 0;i--)\n\t\t{\n\t\t\tnavA[i].addEventListener(\"click\",navClick);\n\t\t\tnavA[i].click();\n\t\t}\n\t\tdocument.getElementById(\"color_possible\").addEventListener(\"change\",colorUpdate);\n\t\tvar e = {};\n\t\te.srcElement = document.getElementById(\"color_possible\");\n\t\tcolorUpdate(e)\n\t</script>\n</body>\n",
+    .user_ctx  = "<!DOCTYPE html><style>@import url(\'https://fonts.googleapis.com/css?family=Barlow|Patua+One\');\n.settingBackground\n{\n\tbackground-color: #e9e9ed;\n\tmargin-left:0;\n\tmargin-right:0;\n\twidth:50vw;\n\ttext-align: center;\n}\n\ninput[type=range] {\n\tmargin-bottom: 1vw;\n\tmargin-top: 1vw;\n\twidth:48vw;\n  }\n  input[type=range]:focus {\n\toutline: none;\n  }\n  input[type=range]::-webkit-slider-runnable-track {\n\twidth: 100%;\n\theight: 1.7vw;\n\tcursor: pointer;\n\tanimate: 0.2s;\n\n\tbackground: #bcbcbe;\n\tborder-radius: 0.3vw;\n\tborder: 0.1vw solid #000000;\n  }\n  input[type=range]::-webkit-slider-thumb {\n\n\tborder: 0.1vw solid #000000;\n\theight: 2vw;\n\twidth: 2vw;\n\tborder-radius: 0.3vw;\n\tbackground: #0066ff;;\n\tcursor: pointer;\n\t-webkit-appearance: none;\n\n  }\n  input[type=range]:focus::-webkit-slider-runnable-track {\n\tbackground: #a93085;\n  }\n  input[type=range]::-moz-range-track {\n\twidth: 100%;\n\theight: 1.7vw;\n\tcursor: pointer;\n\tanimate: 0.2s;\n\n\tbackground: #bcbcbe;\n\tborder-radius: 0.3vw;\n\tborder: 0.1vw solid #000000;\n  }\n  input[type=range]::-moz-range-thumb {\n\n\tborder: 0.1vw solid #000000;\n\theight: 2vw;\n\twidth: 2vw;\n\tborder-radius: 0.3vw;\n\tbackground: #0066ff;;\n\tcursor: pointer;\n  }\n  input[type=range]::-ms-track {\n\twidth: 100%;\n\theight: 10px;\n\tcursor: pointer;\n\tanimate: 0.2s;\n\tbackground: transparent;\n\tborder-color: transparent;\n\tcolor: transparent;\n  }\n  input[type=range]::-ms-fill-lower {\n\tbackground: #a93099;\n\tborder: 1px solid #000000;\n\tborder-radius: 10px;\n\tbox-shadow: 1px 1px 1px #000000;\n  }\n  input[type=range]::-ms-fill-upper {\n\tbackground: #a93085;\n\tborder: 1px solid #000000;\n\tborder-radius: 10px;\n\tbox-shadow: 1px 1px 1px #000000;\n  }\n  input[type=range]::-ms-thumb {\n\tbox-shadow: 1px 1px 1px #000000;\n\tborder: 1px solid #000000;\n\theight: 2vw;\n\twidth: 2vw;\n\tborder-radius: 1vw;\n\tbackground: #f01d1d;\n\tcursor: pointer;\n  }\n  input[type=range]:focus::-ms-fill-lower {\n\tbackground: #a9308b;\n  }\n  input[type=range]:focus::-ms-fill-upper {\n\tbackground: #a97f30;\n  }\n  \n\nlabel\n{\n\tfloat:left;\n\tmargin-top:auto;\n\tmargin-bottom: auto;\n\tmargin-left:0.3vw;\n\tfont-family:\'Barlow\', sans-serif;;\n\tfont-size: 2vw;\n}\n\nselect\n{\n\theight:3.125vw;\n\twidth:9.375vw;\n\tmargin-bottom: 1vw;\n\tfont-size: 2vw;\n\tfont-family:\'Barlow\', sans-serif;;\n}\nbutton\n{\n\tfont-size: 2.5vw;\n\tcolor:black;\n\twidth: 50vw;\n\theight:3.125vw;\n\tbackground-color: #97f26a;\n}\nbutton:active:hover{\n\tbackground-color: #4e8831;\n}\nbutton:hover\n{\n\tbackground-color: #7ecc56;\n}\n.hidden\n{\n\tdisplay:none;\n}\n.colorBox{\n    margin:0px;\n\tmargin-bottom: 1vw;\n    padding:0px;\n    outline:0px solid transparent;\n\twidth:3.125vw;\n\theight:3.125vw;\n}\n.colorDiv\n{\n\tmargin-left:0px;\n\tmargin-right:0px;\n\twidth:100%;\n}\n\t\tdiv{\n\t\t\t  display: block;\n\t\t\t\tmargin-left: auto;\n\t\t\t\tmargin-right: auto;\n\t\t\t\twidth: 50%;\n\t\t}\n\n figure{\n\t display:inline-block;\n\t width:10vw;\n\t height:20vw;\n\t margin:0;\n\t padding:0;\n\t vertical-align: middle\n }\n figcaption{\n\t\tdisplay:inline-block;\n\t\theight:2vw;\n }\n\t\t*{\n\t\t\tmargin:0;\n\t\t\tpadding:0;\n\t\t\tborder-width:0;\n\t\t}\n\t\tnav{\n\t\t\tposition:fixed;\n\t\t\tleft:0;\n\t\t\ttop:0;\n\t\t\theight:5vh;\n\t\t\twidth:100vw;\n\t\t\tbackground-color:black;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-color:#97f26a;\n\t\t\tborder-width:.4vh;\n\t\t}\n\t\tnav ul{\n\t\t\tlist-style-type:none;\n\t\t\tline-height:5vh;\n\t\t\tmargin:0;\n\t\t\twidth:100vw;\n\t\t\tfont-size:1em;\n\t\t}\n\t\tnav ul li{\n\t\t\tdisplay:inline-block;\n\t\t\ttext-align:center;\n\t\t\tfloat:left;\n\t\t\tmargin:0;\n\t\t}\n\t\tnav ul li a{\n\t\t\tdisplay:inline-block;\n\t\t\tcolor:white;\n\t\t\ttext-decoration:none;\n\t\t\twidth:5vh;\n\t\t\theight:5vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\tfont-size:1.5vw;\n\t\t}\n\t\tnav ul li a:hover{\n\t\t\tbackground-color:grey;\n\t\t/*\tborder-top-style:outset;*/\n\t\t\tborder-top-width:1vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-bottom-width:.4vh;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t}\n\t\tnav ul li p{\n\t\t\tdisplay:inline-block;\n\t\t\tcolor:white;\n\t\t\ttext-decoration:none;\n\t\t\twidth:20vw;\n\t\t\theight:5vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\tfont-size:2em;\n\t\t}\n\t\tnav ul li:last-child\n\t\t{\n\t\t\tfloat:right;\n\t\t\tmargin-right:7vw;\n\t\t}\n\t\th1{\n\t\t\tmargin-top:3vh;\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\ttext-align:center;\n\t\t\tfont-size:5em;\n\t\t\twidth:50vw;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\th2{\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\twidth:50vw;\n\t\t\tfont-size:2em;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\th3{\n\t\t\tfont-family:\'Patua One\', cursive;\n\t\t\twidth:50vw;\n\t\t\tfont-size:1.2em;\n\t\t\tmargin:3vh auto;\n\t\t}\n\t\tiframe + a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\th2 + a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\tbody > a{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t\tdisplay:block;\n\t\t}\n\t\tp{\n\t\t\tfont-family:\'Barlow\', sans-serif;;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\ttext-indent:4vw;\n\t\t}\n\t\tol{\n\t\t\tfont-family:\'Barlow\', sans-serif;\n\t\t\tfont-size:1.2em;\n\t\t\twidth:50vw;\n\t\t\tmargin:auto;\n\t\t\tlist-style-type:circle;\n\t\t}\n\t\tli{\n\t\t\tmargin-top:.6vh;\n\t\t}\n\t\t\n\t\timg{\n\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\t.iframeS{\n\t\t\twidth:320;\n\t\t\theight:180;\n\t\t}\n\t\tiframe{\n\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\tvideo{\n\t\t\t\tdisplay:block;\n\t\t\tmargin:3vh auto;\n\t\t\twidth:50vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\t\ttable{\n\t\t\tborder-collapse:collapse;\n\t\t\tmargin:3vh auto;\n\t\t\tuser-select:none;\n\t\t}\n\t\ttd,th{\n\t\t\tborder: .3vh solid black;\n\t\t\ttext-align: left;\n\t\t\tpadding: 1vh;\n\t\t\tfont-family:Verdana;\n\t\t}\n\t\tth{\n\t\t\tcolor:white;\n\t\t\tbackground-color:#97f26a;\t\t\n\t\t}\n\n\t\tbody:not(nav){\n\t\t\tposition:relative;\n\t\t\ttop:7vh;\n\t\t}\n\t\t#active{\n\t\t\tbackground-color:#0066ff;\n\t\t}\n\t\t#active:hover{\n\t\t\tbackground-color:#6699ff;\n\t\t}\n\t\t.ordered{\n\t\t\tlist-style-type:lower-alpha;\n\t\t}\n\t\t.imgS{\n\t\t\twidth:10vw;\n\t\t\theight:10vw;\n\t\t}\n\t\tli .imgS{\n\t\tdisplay:inline;\n\t\t\tmargin-top:3vh ;\n\t\t\tmargin-bottom:3vh;\n\t\t\tmargin-left:auto;\n\t\t\tmargin-right:auto;\n\t\t\twidth:10vw;\n\t\t\tborder-bottom-style:solid;\n\t\t\tborder-top-style:solid;\n\t\t\tborder-top-color:#0066ff;\n\t\t\tborder-bottom-color:#97f26a;\n\t\t\tborder-width:1vh;\n\t\t}\n\n</style>\n<script></script>\n\n<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css\">\n<link rel=\"stylesheet\" type=\"text/css\" href=\"style.css?v=1\">\n<head>\n\t<title>LED Matrix Control</title>\n</head>\n<body>\n\t<div page-name=\"Color_Palette\">\n\t\t<h1>Color Palette</h1>\n\t\t<select id = \"color_possible\">\n\t\t\t<option value =\"def\">Default</option>\n\t\t\t<option value=\"umd\">UMD</option>\n\t\t\t<option value=\"us\">U.S.</option>\n\t\t\t<option value=\"solid\">Solid</option>\n\t\t</select>\n\t\t<br/>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<input class = \"hidden\" type=\"text\" name = \"submit_type\" value =\"color_set\" display=\"none\"/>\n\t\t\t<div class = \"colorDiv\"><input  class = \"colorBox\" type = \"color\" id = \"c0\" name = \"c0\"/><input  class = \"colorBox\" type = \"color\" id = \"c1\" name = \"c1\"/><input  class = \"colorBox\" type = \"color\" id = \"c2\" name = \"c2\"/><input  class = \"colorBox\" type = \"color\" id = \"c3\" name = \"c3\"/><input  class = \"colorBox\" type = \"color\" id = \"c4\" name = \"c4\"/><input  class = \"colorBox\" type = \"color\" id = \"c5\" name = \"c5\"/><input  class = \"colorBox\" type = \"color\" id = \"c6\" name = \"c6\"/><input  class = \"colorBox\" type = \"color\" id = \"c7\" name = \"c7\"/><input  class = \"colorBox\" type = \"color\" id = \"c8\" name = \"c8\"/><input  class = \"colorBox\" type = \"color\" id = \"c9\" name = \"c9\"/><input  class = \"colorBox\" type = \"color\" id = \"c10\" name = \"ca\"/><input  class = \"colorBox\" type = \"color\" id = \"cv\" name = \"cs\"/><input  class = \"colorBox\" type = \"color\" id = \"c12\" name = \"cd\"/><input  class = \"colorBox\" type = \"color\" id = \"sdc\" name = \"cf\"/><input  class = \"colorBox\" type = \"color\" id = \"cg\" name = \"cg\"/><input  class = \"colorBox\" type = \"color\" id = \"cj\" name = \"cp\"/></div>\n\n\t\t\t\n\t\t\t<button onclick =submitForm ontouchstart=submitForm><i class = \"fa fa-paper-plane\"></i></button>\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<div page-name=\"Animation_Settings\">\n\t\t\n\t\t<h1>Animation Settings</h1>\n\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<input class = \"hidden\" type=\"text\" name = \"submit_type\" value =\"settings_set\" display=\"none\"/>\n\t\t\t<div class = \"settingBackground\"><label for =\"sensitivity\">Sensitivity</label><input type = \"range\" min = \"0\" max = \"9\" step = \"1\"  value = \"5\" id = \"sensitivity\" name = \"sensitivity\" class = \"rangeSlider\"></div>\n\t\t\t<div class = \"settingBackground\"><label for =\"brightness\">Brightness</label><input type = \"range\" min = \"0\" max = \"9\" step = \"1\"  value = \"5\" d = \"brightness\" name = \"brightness\" class = \"rangeSlider\"></div>\n\t\t\t<div class = \"settingBackground\"><label for =\"relax\">Drop Time</label><input type = \"range\" min = \"0\" max = \"9\" step = \"1\"  value = \"5\" id= \"relax\" name = \"relax\" class = \"rangeSlider\"></div>\n\t\t\t<select name = \"mode\" id = \"color_possible\">\n\t\t\t\t<option value =\"0\">Normal Vis</option>\n\t\t\t\t<option value=\"1\">Image</option>\n\t\t\t\t<option value=\"2\">Image Vis</option>\n\n\t\t\t</select>\n\t\t\t<button onclick =submitForm ontouchstart=submitForm><i class = \"fa fa-paper-plane\"></i></button>\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\n\t<div page-name=\"Display_Image\">\n\t\t<h1>Display Image</h1>\n\t\t<div class = \"settingBackground\"><label for =\"box_size\">Box Size</label><input type = \"range\" min = \"1\" max = \"64\" step = \"1\"  value = \"5\" id = \"box_size\" name = \"box_size\" class = \"rangeSlider\"></div>\n\t\t<input type=\"file\" id=\"image_upload\">\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<input class = \"hidden\" type=\"text\" name = \"submit_type\" value =\"image_set\" display=\"none\"/>\n\t\t\t<div class = \"hidden\" id = \"image_data\"><input  class = \"colorBox\" type = \"color\" id = \"c0\" name = \"c0\"/></div>\n\t\t\t<button onclick =submitForm ontouchstart=submitForm><i class = \"fa fa-paper-plane\"></i></button>\n\t\t</form>\n\n\t\t<div style=\"position: relative;\">\n\t\t\t<canvas style=\"position:absolute;top:0;left:0;z-index: 3;\" id= \"layer1\" width=\"500\" height=\"500\"></canvas>\n\t\t\t<canvas style=\"position:absolute;top:0;left:0;z-index: 2;\"  id= \"layer0\" width=\"500\" height=\"500\"></canvas>\n\t\t\t\n\t\t</div>\n\t\t<canvas style = \"border:solid\" width = \"256\" height = \"256\" id = \"dbg_can\"></canvas>\n\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t\t\n\t</div>\n\n\t<div page-name=\"Scroll_Text\">\n\t\t<h1>Scroll Text</h1>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<label for =\"fname\">First nameL</label><input type = \"text\" id = \"fname\" name = \"fname\">\n\t\t\t<label for =\"lname\">Last nameL</label><input type = \"text\" id = \"lname\" name = \"lname\">\n\t\t\t<input type = \"submit\" value = \"Submit\">\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<div page-name=\"API_Based\">\n\t\t<h1>API Based</h1>\n\t\t<form action = \"/echo\" target = \"hiddenFrame\" method = \"post\">\n\t\t\t<label for =\"fname\">First nameL</label><input type = \"text\" id = \"fname\" name = \"fname\">\n\t\t\t<label for =\"lname\">Last nameL</label><input type = \"text\" id = \"lname\" name = \"lname\">\n\t\t\t<input type = \"submit\" value = \"Submit\">\n\t\t</form>\n\t\t<iframe name = \"hiddenFrame\" width = \"0\" height = \"0\" border = \"0\" style = \"display:none;\"></iframe>\n\t</div>\n\n\t<nav>\n\t\t<ul>\n\t\t\t<li>\n\t\t\t\t<a id=\"active\" page-name = \"Color_Palette\" class = \"nav-button\"><i class=\"fa fa-paint-brush\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"Animation_Settings\" class = \"nav-button\"><i class=\"fa fa-cog\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"Display_Image\" class = \"nav-button\"><i class=\"fa fa-file-image-o\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"Scroll_Text\" class = \"nav-button\"><i class=\"fa fa-file-text-o\"></i></a>\n\t\t\t</li>\n\t\t\t<li>\n\t\t\t\t<a page-name = \"API_Based\" class = \"nav-button\"><i class=\"fa fa-cloud\"></i></a>\n\t\t\t</li> \n\t\t\t\n\n\n\t\t\t<li>\n\t\t\t\t<p id = \"Page_Text\">Color Palette</a>\n\t\t\t</li>\n\t\t</ul>\n\t</nav>\n\t<script>\n\t\tfunction componentToHex(c) {\n  let hex = c.toString(16);\n  return hex.length == 1 ? \"0\" + hex : hex;\n}\nfunction rgbToHex(r, g, b) {\n  return \"#\" + componentToHex(r) + componentToHex(g) + componentToHex(b);\n}\n\n\t\tvar umd = [\"#c17d11\",  \n\"#c17d11\",  \n\"#555753\",  \n\"#555753\",  \n\"#a40000\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#eeeeec\",  \n\"#c17d11\",  \n\"#c17d11\",  \n\"#555753\",  \n\"#555753\",  \n\"#a40000\",  \n\"#a40000\", \n\"#eeeeec\", \n\"#eeeeec\",]\n\n\t\tvar default_color = [\"#5c3566\",  \n\"#a900ff\",  \n\"#5100ff\",  \n\"#204a87\",  \n\"#00b1ff\",  \n\"#c17d11\",  \n\"#c4a000\",  \n\"#eeeeec\",  \n\"#555753\",  \n\"#73d216\",  \n\"#4e9a06\",  \n\"#f57900\",  \n\"#ce5c00\",  \n\"#b55151\",  \n\"#ef2929\",  \n\"#a40000\"];\n\n\t\tvar us = [\n\t\t\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",  \n\"#eeeeec\",  \n\"#00b1ff\",  \n\"#a40000\",\n\t\t]\n\t\tfunction colorUpdate(e)\n\t\t{\n\t\t\tvar choice = e.srcElement.value;\n\t\t\tvar arr = [];\n\t\t\tif(choice === \"umd\")\n\t\t\t{\n\t\t\t\tarr = umd;\n\t\t\t}\n\t\t\tif(choice === \"def\")\n\t\t\t{\n\t\t\t\tarr = default_color;\n\t\t\t\t//console.log(\"DEF\");\n\t\t\t}\n\t\t\tif(choice=== \"us\")\n\t\t\t{\n\t\t\t\tarr = us;\n\t\t\t}\n\t\t\tif(choice ===\"solid\")\n\t\t\t{\n\t\t\t\tvar cb = document.getElementsByClassName(\"colorDiv\")[0].children;\n\t\t\tfor(var i = 0;i < 16;i++)\n\t\t\t{\n\t\t\t\tcb[i].value = cb[0].value;\n\t\t\t}\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar cb = document.getElementsByClassName(\"colorDiv\")[0].children;\n\t\t\tfor(var i = 0;i < 16;i++)\n\t\t\t{\n\t\t\t\tcb[i].value = arr[i];\n\t\t\t}\n\t\t}\n\n\t\tfunction getElementByAttribute(attribute, value)\n\t\t{\n\t\t\treturn document.querySelectorAll(\"[\" + attribute + \"=\" + value + \"]\")[0];\n\t\t}\n\t\tfunction submitForm(e)\n\t\t{\n\t\t\te.srcElement.parentNode.submit();\n\t\t}\n\t\tfunction navClick(e)\n\t\t{\n\t\t\tvar old = document.getElementById(\"active\");\n\t\t\told.id = null;\n\t\t\tconsole.log(e.srcElement.parentNode);\n\t\t\tconsole.log(e.srcElement);\n\t\t\tvar properSource;\n\t\t\tif(e.srcElement.tagName === \"A\")\n\t\t\t{\n\t\t\t\tproperSource = e.srcElement;\n\n\t\t\t}\n\t\t\telse\n\t\t\t{\n\t\t\t\tproperSource = e.srcElement.parentNode;\n\n\t\t\t}\n\n\t\t\tproperSource.id = \"active\";\n\n\t\t\tgetElementByAttribute(\"page-name\",old.getAttribute(\"page-name\")).style.display = \"none\";\n\t\t\tgetElementByAttribute(\"page-name\",properSource.getAttribute(\"page-name\")).style.display = \"block\";\n\n\t\t\t\n\t\t}\n\n\t\tfunction imageUpload(e)\n\t\t{\n    if(e.target.files) {\n      let imageFile = e.target.files[0]; //here we get the image file\n      var reader = new FileReader();\n      reader.readAsDataURL(imageFile);\n      reader.onloadend = function (e) {\n        var myImage = new Image(); // Creates image object\n        myImage.src = e.target.result; // Assigns converted image to image object\n        myImage.onload = function(ev) {\n          var myCanvas = document.getElementById(\"layer0\"); // Creates a canvas object\n          var myContext = myCanvas.getContext(\"2d\"); // Creates a contect object\n          myCanvas.width = myImage.width; // Assigns image\'s width to canvas\n          myCanvas.height = myImage.height; // Assigns image\'s height to canvas\n          myContext.drawImage(myImage,0,0); // Draws the image on canvas\n          let imgData = myCanvas.toDataURL(\"image/jpeg\",0.75); // Assigns image base64 string in jpeg format to a variable\n\t\t  document.getElementById(\"layer1\").width = myCanvas.width;\n\t\t  document.getElementById(\"layer1\").height = myCanvas.height;\n\n        }\n      }\n    }\n  }\n  var can = document.getElementById(\"layer1\");\n\t\t\tvar ctx = can.getContext(\"2d\");\n\t\t\t\n  \t\tfunction imageMove(e)\n\t\t{\n\t\t\tconsole.log(e.clientX, e.clientY);\n\t\t\tvar rect = document.getElementById(\"layer1\").getBoundingClientRect()\n\t\t\tvar x = e.clientX - rect.left;\n\t\t\tvar y = e.clientY - rect.top;\n\t\t\t//ctx.beginPath();\n\t\t\tvar boxSize = document.getElementById(\"box_size\").value;\n\t\t\tctx.clearRect(0,0,can.width,can.height);\n\t\t\tctx.strokeStyle =  \"#FF0000\";\n\t\t\tctx.strokeRect(x,y,16*boxSize,16*boxSize);\n\t\t\t//ctx.stroke();\n\t\t\t\n\t\t}\n\n\n\n\t\tfunction imageClick(e)\n\t\t{\n\t\t\tvar rect = document.getElementById(\"layer1\").getBoundingClientRect()\n\t\t\tvar cx = e.clientX - rect.left;\n\t\t\tvar cy = e.clientY - rect.top;\n\t\t\tvar boxSize = document.getElementById(\"box_size\").value;\n\t\t\tctxI = document.getElementById(\"layer0\").getContext(\"2d\");\n\t\t\t//console.log(boxSize, cx + x* boxSize, cy + y * boxSize,boxSize * 16,boxSize * 16);\n\t\t\tvar dat = ctxI.getImageData(cx, cy,boxSize * 16,boxSize * 16).data;\n\t\t\tdocument.getElementById(\"image_data\").innerHTML = \"\";\n\t\t\tfor(var x = 0;x < 16;x++)\n\t\t\t{\n\t\t\t\tfor(var y = 0; y < 16;y++)\n\t\t\t\t{\n\t\t\t\t\t\n\t\t\t\t\tvar ravg = 0.0;\n\t\t\t\t\tvar gavg = 0.0;\n\t\t\t\t\tvar bavg = 0.0;\n\t\t\t\t\tfor(var i = 0;i < boxSize;i++)\n\t\t\t\t\t{\n\t\t\t\t\t\tfor(var j = 0;j < boxSize;j++)\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\travg += dat[((x  + y * boxSize*16)  * boxSize + i + j * boxSize * 16)* 4];\n\t\t\t\t\t\t\tgavg += dat[((x  + y * boxSize*16)  * boxSize + i + j * boxSize * 16)* 4 + 1];\n\t\t\t\t\t\t\tbavg += dat[((x  + y * boxSize*16)  * boxSize + i + j * boxSize * 16)* 4 + 2];\n\t\t\t\t\t\t\t\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\travg/= 1/255*(boxSize * 16) * (boxSize * 16);\n\t\t\t\t\tgavg/= 1/255*(boxSize * 16) * (boxSize * 16);\n\t\t\t\t\tbavg/= 1/255*(boxSize * 16) * (boxSize * 16);\n\t\t\t\t\travg = Math.round(ravg);\n\t\t\t\t\tgavg= Math.round(gavg);\n\t\t\t\t\tbavg = Math.round(bavg);\n\t\t\t\t\tdcan = document.getElementById(\"dbg_can\");\n\t\t\t\t\tdctx = dcan.getContext(\"2d\");\n\t\t\t\t\tdctx.fillStyle = rgbToHex(ravg,gavg,bavg);\n\t\t\t\t\tdctx.fillRect(16*x,16*y,16,16);\n\t\t\t\t\tconsole.log(ravg,gavg,bavg);\n\n\t\t\t\t\tvar node = document.createElement(\"INPUT\");\n\t\t\t\t\t\n\t\t\t\t\tnode.name = componentToHex(x + 16 * y);\n\t\t\t\t\tnode.value = rgbToHex(ravg,gavg,bavg);\n\t\t\t\t\tdocument.getElementById(\"image_data\").appendChild(node);\n\t\t\t\t}\n\t\t\t}\n\n\n\t\t\n\t\t}\n\t\tdocument.getElementById(\"layer1\").addEventListener(\"mousemove\",imageMove);\n\t\tdocument.getElementById(\"layer1\").addEventListener(\"mousedown\",imageClick);\n\t\tnavA = document.getElementsByClassName(\"nav-button\");\n\t\tfor(var i =  navA.length - 1;i >= 0;i--)\n\t\t{\n\t\t\tnavA[i].addEventListener(\"click\",navClick);\n\t\t\tnavA[i].click();\n\t\t}\n\t\tdocument.getElementById(\"color_possible\").addEventListener(\"change\",colorUpdate);\n\t\tdocument.getElementById(\"image_upload\").addEventListener(\"change\",imageUpload)\n\t\tvar e = {};\n\t\te.srcElement = document.getElementById(\"color_possible\");\n\t\tcolorUpdate(e)\n\t</script>\n</body>\n",
 };
 int drop = 1;
 int brightness = 5;
 int sensitivity =5;
 int color_update = 0;
+int image[3 * 16 * 16];
+int image_update = 0;
 int colors[48] = {235,235,57,237,223,41,238,211,22,239,200,0,240,187,0,240,175,0,240,163,0,239,150,0,238,137,0,237,124,0,235,111,0,232,97,0,229,82,0,226,65,0,222,45,3,217,13,13};
+int mode = 0;
 /* An HTTP POST handler */
 int char_to_int(char c)
 {
@@ -426,14 +430,14 @@ int hex_to_decimal(char l, char r)
 
 static esp_err_t echo_post_handler(httpd_req_t *req)
 {
-    char buf[1024];
+    
     
     int ret, remaining = req->content_len;
 
     while (remaining > 0) {
         /* Read the data for the request */
         if ((ret = httpd_req_recv(req, buf,
-                        MIN(remaining, sizeof(buf)))) <= 0) {
+                        MIN(remaining, BUF_SIZE * sizeof(char)))) <= 0) {
             if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
                 /* Retry receiving if timeout occurred */
                 continue;
@@ -453,6 +457,32 @@ static esp_err_t echo_post_handler(httpd_req_t *req)
         setting1 = buf[1];
     }
     printf("%s",buf);
+//submit_type=image_set&%23000000=%233e3e3e&%23100000=%233e3e3e&%23200000=%233e3e3e&%23300000=%233e3e3e&%23400000=%233e3e3e&%23500000=%233e3e3e&%23600000=%233e3e3e&%23700000=%233e3e3e&%23800000=%233e3e3e&%23900000=%233e3e3e&%23a00000=%233e3e3e&%23b00000=%233e3e3e&%23c00000=%233e3e3e&%23d00000=%233e3e3e&%23e00000=%233e3e3e&%23f00000=%233e3e3e&%23010000=%233e3e3e&%23110000=%233e3e3e&%23210000=%233e3e3e&%23310000=%233e3e3e&%23410000=%233e3e3e&%23510000=%233e3e3e&%23610000=%233e3e3e&%23710000=%233e3e3e&%23810000=%233e3e3e&%23910000=%233e3e3e&%23a10000=%233e3e3e&%23b10000=%233e3e3e&%23c10000=%233e3e3e&%23d10000=%233e3e3e&%23e10000=%233e3e3e&%23f10000=%233e3e3e&%23020000=%233e3e3e&%23120000=%233e3e3e&%23220000=%233e3e3e&%23320000=%233e3e3e&%23420000=%233e3e3e&%23520000=%233e3e3e&%23620000=%233e3e3e&%23720000=%233e3e3e&%23820000=%233e3e
+//submit_type=image_set&00=0d120f&10=423319&20=d29f3f&30=7f2431&40=832336&50=832336&60=832336&70=832336&80=832336&90=832336&a0=832336&b0=832336&c0=832336&d0=832236&e0=7d2233&f0=7a2534&01=0f110c&11=110e10&21=7f5b2e&31=802333&41=832336&51=832336&61=832336&71=832336&81=832336&91=842236&a1=82
+//submit_type=image_set&00=%23c8a2a3&10=%23c8a3a5&20=%237c666e&30=%23473036&40=%234f2d2b&50=%238e4431&60=%23c46344&70=%233a3439&80=%2328262d&90=%232a282f&a0=%232b282e&b0=%2332333c&c0=%232e2e3
+    if(buf[12] == 'i')
+    {
+        printf("IMAGE UPDATE!!!\n\n");
+        for(int i = 0;i < 256;i++)
+        {
+                        int r = hex_to_decimal(buf[28 + 0 + 13 * i],
+            buf[28 + 1 + 13 * i]);
+            int g = hex_to_decimal(buf[28 + 2 + 13 * i],
+            buf[28 + 3 + 13 * i]);
+
+            int b = hex_to_decimal(buf[28 + 4 + 13 * i],
+            buf[28 + 5 + 13 * i]);
+            
+            image[i*3] = r;
+
+            image[i*3 + 1] = g;
+            image[i*3 + 2] = b;
+            printf("IMAGE %d %d %d\n",r,g,b);
+
+        }
+        image_update = 1;
+    }
+    
     if(buf[12] == 'c')
     {
         for(int i = 0; i <16;i++)
@@ -473,14 +503,20 @@ static esp_err_t echo_post_handler(httpd_req_t *req)
         }
         color_update = 1;
     }
+
+
     if(buf[12] == 's')
     {
         
         brightness = (int)buf[50] - 48;
         sensitivity = (int)buf[37] - 48;
         drop = (int)buf[58] - 47;//min 1
+        mode = (int)buf[65] - 48;
         printf("%d %d %d BRT SENS DRP\n",brightness,sensitivity, drop);
+        if(mode == 0)
         color_update  =1;
+        if(mode == 1)
+        image_update = 1;
     }
     // End response
     httpd_resp_send_chunk(req, NULL, 0);
@@ -738,111 +774,128 @@ void drawTask(void* pvParameters)
             }
     while(1)    
     {
-        if(color_update)
+        if(mode == 0)
         {
-            color_update = 0;
-             for(int i =0; i < 16;i++)
+            if(color_update)
             {
-
-
-                                        float brt = ((float) brightness )/ 1.0 / 20.0;
-                    int r = (int)(colors[(i)*3] * brt);
-                    int g = (int)(colors[(i)*3 + 1] * brt);
-                    int b = (int)(colors[(i)*3+ 2] * brt);
-                    if(r > 255)
-                    {
-                        r=225;
-                    }
-                    if(r < 0)
-                    {
-
-                        r = 0;
-                    }
-                    if(g > 255)
-                    {
-                        g=225;
-                    }
-                    if(g < 0)
-                    {
-
-                        g = 0;
-                    }
-                    if(b > 255)
-                    {
-                        b =225;
-                    }
-                    if(b < 0)
-                    {
-
-                        b = 0;
-                    }
-                    ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i,0),r,g,b));
-
-               
-            }
-        }
-                    struct timeval tv_now;
-            gettimeofday(&tv_now, NULL);
-            int64_t time_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
-        //printf("DRAW TASK %lld\n",time_us);
-               //ESP_ERROR_CHECK(strip->clear(strip, 10));   
-    // Clear LED strip (turn off all 
-                for(int i = 1; i < 17;i++)
-            {
-                int low_lim = first;
-                
-                for(int k = low_lim;k < 16;k++)
+                color_update = 0;
+                for(int i =0; i < 16;i++)
                 {
-                    if(k < decay_stack[i-1])
-                    {
+
+
+                                            float brt = ((float) brightness )/ 1.0 / 20.0;
+                        int r = (int)(colors[(i)*3] * brt);
+                        int g = (int)(colors[(i)*3 + 1] * brt);
+                        int b = (int)(colors[(i)*3+ 2] * brt);
+                        if(r > 255)
+                        {
+                            r=225;
+                        }
+                        if(r < 0)
+                        {
+
+                            r = 0;
+                        }
+                        if(g > 255)
+                        {
+                            g=225;
+                        }
+                        if(g < 0)
+                        {
+
+                            g = 0;
+                        }
+                        if(b > 255)
+                        {
+                            b =225;
+                        }
+                        if(b < 0)
+                        {
+
+                            b = 0;
+                        }
+                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i,0),r,g,b));
+
+                
+                }
+            }
+
+            //printf("DRAW TASK %lld\n",time_us);
+                //ESP_ERROR_CHECK(strip->clear(strip, 10));   
+        // Clear LED strip (turn off all 
+                    for(int i = 1; i < 17;i++)
+                {
+                    int low_lim = first;
                     
+                    for(int k = low_lim;k < 16;k++)
+                    {
+                        if(k < decay_stack[i-1])
+                        {
+                        
 
-                                        float brt = ((float) brightness )/ 1.0 / 20.0;
-                    int r = (int)(colors[(i-1)*3] * brt);
-                    int g = (int)(colors[(i-1)*3 + 1] * brt);
-                    int b = (int)(colors[(i-1)*3+ 2] * brt);
-                    if(r > 255)
-                    {
-                        r=225;
-                    }
-                    if(r < 0)
-                    {
+                                            float brt = ((float) brightness )/ 1.0 / 20.0;
+                        int r = (int)(colors[(i-1)*3] * brt);
+                        int g = (int)(colors[(i-1)*3 + 1] * brt);
+                        int b = (int)(colors[(i-1)*3+ 2] * brt);
+                        if(r > 255)
+                        {
+                            r=225;
+                        }
+                        if(r < 0)
+                        {
 
-                        r = 0;
-                    }
-                    if(g > 255)
-                    {
-                        g=225;
-                    }
-                    if(g < 0)
-                    {
+                            r = 0;
+                        }
+                        if(g > 255)
+                        {
+                            g=225;
+                        }
+                        if(g < 0)
+                        {
 
-                        g = 0;
-                    }
-                    if(b > 255)
-                    {
-                        b =225;
-                    }
-                    if(b < 0)
-                    {
+                            g = 0;
+                        }
+                        if(b > 255)
+                        {
+                            b =225;
+                        }
+                        if(b < 0)
+                        {
 
-                        b = 0;
+                            b = 0;
+                        }
+                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),r,g,b));
+                        }
+                        else
+                        {
+                            ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),0,0,0));
+                        }
                     }
-                    ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),r,g,b));
-                    }
-                    else
+                    first = 1;
+                }
+                ESP_ERROR_CHECK(strip->refresh(strip, 10));
+        }
+        else if(mode == 1  )
+        {
+            if(image_update)
+            {
+                for(int x = 0;x < 16;x++)
+                {
+                    for(int y = 0;y < 16;y++)
                     {
-                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),0,0,0));
+                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(15-y,15- x),image[(x + (15-y) * 16)*3 ]/10 ,image[(x + (15-y) * 16)*3 + 1]/10 ,image[(x + (15-y) * 16)*3 + 2]/10 ));
                     }
                 }
-                first = 1;
+                ESP_ERROR_CHECK(strip->refresh(strip, 10));
+                image_update = 0;
             }
-            ESP_ERROR_CHECK(strip->refresh(strip, 10));
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
     }
 }
 void app_main(void)
 {
-
+    buf = malloc(BUF_SIZE * sizeof(char));
 
     /* int ch;
 
