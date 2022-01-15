@@ -347,6 +347,7 @@ int sensitivity =5;
 int color_update = 0;
 int image[3 * 16 * 16];
 int image_update = 0;
+int image_vis_update = 0;
 int colors[48] = {235,235,57,237,223,41,238,211,22,239,200,0,240,187,0,240,175,0,240,163,0,239,150,0,238,137,0,237,124,0,235,111,0,232,97,0,229,82,0,226,65,0,222,45,3,217,13,13};
 int mode = 0;
 /* An HTTP POST handler */
@@ -517,6 +518,8 @@ static esp_err_t echo_post_handler(httpd_req_t *req)
         color_update  =1;
         if(mode == 1)
         image_update = 1;
+        if(mode == 2)
+        image_vis_update = 1;
     }
     // End response
     httpd_resp_send_chunk(req, NULL, 0);
@@ -823,7 +826,7 @@ void drawTask(void* pvParameters)
             //printf("DRAW TASK %lld\n",time_us);
                 //ESP_ERROR_CHECK(strip->clear(strip, 10));   
         // Clear LED strip (turn off all 
-                    for(int i = 1; i < 17;i++)
+               for(int i = 1; i < 17;i++)
                 {
                     int low_lim = first;
                     
@@ -873,7 +876,8 @@ void drawTask(void* pvParameters)
                     }
                     first = 1;
                 }
-                ESP_ERROR_CHECK(strip->refresh(strip, 10));
+               
+        ESP_ERROR_CHECK(strip->refresh(strip, 10));
         }
         else if(mode == 1  )
         {
@@ -890,6 +894,108 @@ void drawTask(void* pvParameters)
                 image_update = 0;
             }
             vTaskDelay(pdMS_TO_TICKS(200));
+        }
+        else if (mode == 2)
+        {
+            if(image_vis_update)
+            {
+                image_vis_update = 0;
+                for(int i =0; i < 16;i++)
+                {
+
+
+                                            float brt = ((float) brightness )/ 1.0 / 20.0;
+                        int r = (int)(colors[(i)*3] * brt);
+                        int g = (int)(colors[(i)*3 + 1] * brt);
+                        int b = (int)(colors[(i)*3+ 2] * brt);
+                        if(r > 255)
+                        {
+                            r=225;
+                        }
+                        if(r < 0)
+                        {
+
+                            r = 0;
+                        }
+                        if(g > 255)
+                        {
+                            g=225;
+                        }
+                        if(g < 0)
+                        {
+
+                            g = 0;
+                        }
+                        if(b > 255)
+                        {
+                            b =225;
+                        }
+                        if(b < 0)
+                        {
+
+                            b = 0;
+                        }
+                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i,0),image[((15 - 0) + (i) * 16)*3 ]/10 ,image[((15-0) + (i) * 16)*3 + 1]/10 ,image[((15-0) + (i) * 16)*3 + 2]/10 ));
+
+                
+                }
+            }
+
+            //printf("DRAW TASK %lld\n",time_us);
+                //ESP_ERROR_CHECK(strip->clear(strip, 10));   
+        // Clear LED strip (turn off all 
+               for(int i = 1; i < 17;i++)
+                {
+                    int low_lim = first;
+                    
+                    for(int k = low_lim;k < 16;k++)
+                    {
+                        if(k < decay_stack[i-1])
+                        {
+                        
+
+                                            float brt = ((float) brightness )/ 1.0 / 20.0;
+                        int r = (int)(colors[(i-1)*3] * brt);
+                        int g = (int)(colors[(i-1)*3 + 1] * brt);
+                        int b = (int)(colors[(i-1)*3+ 2] * brt);
+                        if(r > 255)
+                        {
+                            r=225;
+                        }
+                        if(r < 0)
+                        {
+
+                            r = 0;
+                        }
+                        if(g > 255)
+                        {
+                            g=225;
+                        }
+                        if(g < 0)
+                        {
+
+                            g = 0;
+                        }
+                        if(b > 255)
+                        {
+                            b =225;
+                        }
+                        if(b < 0)
+                        {
+
+                            b = 0;
+                        }
+                        ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),image[((15 - k) + (i - 1) * 16)*3 ]/10 ,image[((15-k) + (i - 1) * 16)*3 + 1]/10 ,image[((15-k) + (i - 1) * 16)*3 + 2]/10 ));
+                        }
+                        else
+                        {
+                            ESP_ERROR_CHECK(strip->set_pixel(strip,position_to_index(i-1,k),0,0,0));
+                        }
+                    }
+                    first = 1;
+                }
+               
+        ESP_ERROR_CHECK(strip->refresh(strip, 10));
         }
     }
 }
