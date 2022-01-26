@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="/static/style.css?v=1">
+<head>
+	<title>LED Matrix Control</title>
+</head>
+<body>
+	<div page-name="Color_Palette">
+		<h1>Color Palette</h1>
+		<select id = "color_possible">
+			<option value ="def">Default</option>
+			<option value="umd">UMD</option>
+			<option value="us">U.S.</option>
+			<option value="solid">Solid</option>
+		</select>
+		<br/>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<input class = "hidden" type="text" name = "submit_type" value ="color_set" display="none"/>
+			<div class = "colorDiv"><input  class = "colorBox" type = "color" id = "c0" name = "c0"/><input  class = "colorBox" type = "color" id = "c1" name = "c1"/><input  class = "colorBox" type = "color" id = "c2" name = "c2"/><input  class = "colorBox" type = "color" id = "c3" name = "c3"/><input  class = "colorBox" type = "color" id = "c4" name = "c4"/><input  class = "colorBox" type = "color" id = "c5" name = "c5"/><input  class = "colorBox" type = "color" id = "c6" name = "c6"/><input  class = "colorBox" type = "color" id = "c7" name = "c7"/><input  class = "colorBox" type = "color" id = "c8" name = "c8"/><input  class = "colorBox" type = "color" id = "c9" name = "c9"/><input  class = "colorBox" type = "color" id = "c10" name = "ca"/><input  class = "colorBox" type = "color" id = "cv" name = "cs"/><input  class = "colorBox" type = "color" id = "c12" name = "cd"/><input  class = "colorBox" type = "color" id = "sdc" name = "cf"/><input  class = "colorBox" type = "color" id = "cg" name = "cg"/><input  class = "colorBox" type = "color" id = "cj" name = "cp"/></div>
+
+			
+			<button onclick =submitForm ontouchstart=submitForm><i class = "fa fa-paper-plane"></i></button>
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<div page-name="Animation_Settings">
+		
+		<h1>Animation Settings</h1>
+
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<input class = "hidden" type="text" name = "submit_type" value ="settings_set" display="none"/>
+			<div class = "settingBackground"><label for ="sensitivity">Sensitivity</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" id = "sensitivity" name = "sensitivity" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="brightness">Brightness</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" d = "brightness" name = "brightness" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="relax">Drop Time</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" id= "relax" name = "relax" class = "rangeSlider"></div>
+			<div class = "settingBackground"><label for ="hsl_speed">Color Change Speed</label><input type = "range" min = "0" max = "9" step = "1"  value = "5" id= "hsl_speed" name = "hsl_speed" class = "rangeSlider"></div>
+			<select name = "mode" id = "color_possible">
+				<option value ="0">Normal Vis</option>
+				<option value="1">Image</option>
+				<option value="2">Image Vis</option>
+
+			</select>
+			<button onclick =submitForm ontouchstart=submitForm><i class = "fa fa-paper-plane"></i></button>
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+
+	<div page-name="Display_Image">
+		<h1>Display Image</h1>
+		<div class = "settingBackground"><label for ="box_size">Box Size</label><input type = "range" min = "1" max = "64" step = "1"  value = "5" id = "box_size" name = "box_size" class = "rangeSlider"></div>
+		<input type="file" id="image_upload">
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<input class = "hidden" type="text" name = "submit_type" value ="image_set" display="none"/>
+			<div class = "hidden" id = "image_data"><input  class = "colorBox" type = "color" id = "c0" name = "c0"/></div>
+			<button onclick =submitForm ontouchstart=submitForm><i class = "fa fa-paper-plane"></i></button>
+		</form>
+
+		<div style="position: relative;">
+			<canvas style="position:absolute;top:0;left:0;z-index: 3;" id= "layer1" width="500" height="500"></canvas>
+			<canvas style="position:absolute;top:0;left:0;z-index: 2;"  id= "layer0" width="500" height="500"></canvas>
+			
+		</div>
+		<canvas style = "border:solid" width = "256" height = "256" id = "dbg_can"></canvas>
+
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+		
+	</div>
+
+	<div page-name="Scroll_Text">
+		<h1>Scroll Text</h1>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
+			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
+			<input type = "submit" value = "Submit">
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<div page-name="API_Based">
+		<h1>API Based</h1>
+		<form action = "/echo" target = "hiddenFrame" method = "post">
+			<label for ="fname">First nameL</label><input type = "text" id = "fname" name = "fname">
+			<label for ="lname">Last nameL</label><input type = "text" id = "lname" name = "lname">
+			<input type = "submit" value = "Submit">
+		</form>
+		<iframe name = "hiddenFrame" width = "0" height = "0" border = "0" style = "display:none;"></iframe>
+	</div>
+
+	<nav>
+		<ul>
+			<li>
+				<a id="active" page-name = "Color_Palette" class = "nav-button"><i class="fa fa-paint-brush"></i></a>
+			</li>
+			<li>
+				<a page-name = "Animation_Settings" class = "nav-button"><i class="fa fa-cog"></i></a>
+			</li>
+			<li>
+				<a page-name = "Display_Image" class = "nav-button"><i class="fa fa-file-image-o"></i></a>
+			</li>
+			<li>
+				<a page-name = "Scroll_Text" class = "nav-button"><i class="fa fa-file-text-o"></i></a>
+			</li>
+			<li>
+				<a page-name = "API_Based" class = "nav-button"><i class="fa fa-cloud"></i></a>
+			</li> 
+			
+
+
+			<li>
+				<p id = "Page_Text">Color Palette</a>
+			</li>
+		</ul>
+	</nav>
+	<script>
+		function componentToHex(c) {
+  let hex = c.toString(16);
+  return hex.length == 1 ? "0" + hex : hex;
+}
+function rgbToHex(r, g, b) {
+  return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
+
+		var umd = ["#c17d11",  
+"#c17d11",  
+"#555753",  
+"#555753",  
+"#a40000",  
+"#a40000",  
+"#eeeeec",  
+"#eeeeec",  
+"#c17d11",  
+"#c17d11",  
+"#555753",  
+"#555753",  
+"#a40000",  
+"#a40000", 
+"#eeeeec", 
+"#eeeeec",]
+
+		var default_color = ["#5c3566",  
+"#a900ff",  
+"#5100ff",  
+"#204a87",  
+"#00b1ff",  
+"#c17d11",  
+"#c4a000",  
+"#eeeeec",  
+"#555753",  
+"#73d216",  
+"#4e9a06",  
+"#f57900",  
+"#ce5c00",  
+"#b55151",  
+"#ef2929",  
+"#a40000"];
+
+		var us = [
+		"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",  
+"#eeeeec",  
+"#00b1ff",  
+"#a40000",
+		]
+		function colorUpdate(e)
+		{
+			var choice = e.srcElement.value;
+			var arr = [];
+			if(choice === "umd")
+			{
+				arr = umd;
+			}
+			if(choice === "def")
+			{
+				arr = default_color;
+				//console.log("DEF");
+			}
+			if(choice=== "us")
+			{
+				arr = us;
+			}
+			if(choice ==="solid")
+			{
+				var cb = document.getElementsByClassName("colorDiv")[0].children;
+			for(var i = 0;i < 16;i++)
+			{
+				cb[i].value = cb[0].value;
+			}
+				return;
+			}
+			var cb = document.getElementsByClassName("colorDiv")[0].children;
+			for(var i = 0;i < 16;i++)
+			{
+				cb[i].value = arr[i];
+			}
+		}
+
+		function getElementByAttribute(attribute, value)
+		{
+			return document.querySelectorAll("[" + attribute + "=" + value + "]")[0];
+		}
+		function submitForm(e)
+		{
+			e.srcElement.parentNode.submit();
+		}
+		function navClick(e)
+		{
+			var old = document.getElementById("active");
+			old.id = null;
+			console.log(e.srcElement.parentNode);
+			console.log(e.srcElement);
+			var properSource;
+			if(e.srcElement.tagName === "A")
+			{
+				properSource = e.srcElement;
+
+			}
+			else
+			{
+				properSource = e.srcElement.parentNode;
+
+			}
+
+			properSource.id = "active";
+
+			getElementByAttribute("page-name",old.getAttribute("page-name")).style.display = "none";
+			getElementByAttribute("page-name",properSource.getAttribute("page-name")).style.display = "block";
+
+			
+		}
+
+		function imageUpload(e)
+		{
+    if(e.target.files) {
+      let imageFile = e.target.files[0]; //here we get the image file
+      var reader = new FileReader();
+      reader.readAsDataURL(imageFile);
+      reader.onloadend = function (e) {
+        var myImage = new Image(); // Creates image object
+        myImage.src = e.target.result; // Assigns converted image to image object
+        myImage.onload = function(ev) {
+          var myCanvas = document.getElementById("layer0"); // Creates a canvas object
+          var myContext = myCanvas.getContext("2d"); // Creates a contect object
+          myCanvas.width = myImage.width; // Assigns image's width to canvas
+          myCanvas.height = myImage.height; // Assigns image's height to canvas
+          myContext.drawImage(myImage,0,0); // Draws the image on canvas
+          let imgData = myCanvas.toDataURL("image/jpeg",0.75); // Assigns image base64 string in jpeg format to a variable
+		  document.getElementById("layer1").width = myCanvas.width;
+		  document.getElementById("layer1").height = myCanvas.height;
+
+        }
+      }
+    }
+  }
+  var can = document.getElementById("layer1");
+			var ctx = can.getContext("2d");
+			
+  		function imageMove(e)
+		{
+			console.log(e.clientX, e.clientY);
+			var rect = document.getElementById("layer1").getBoundingClientRect()
+			var x = e.clientX - rect.left;
+			var y = e.clientY - rect.top;
+			//ctx.beginPath();
+			var boxSize = document.getElementById("box_size").value;
+			ctx.clearRect(0,0,can.width,can.height);
+			ctx.strokeStyle =  "#FF0000";
+			ctx.strokeRect(x,y,16*boxSize,16*boxSize);
+			//ctx.stroke();
+			
+		}
+
+
+
+		function imageClick(e)
+		{
+			var rect = document.getElementById("layer1").getBoundingClientRect()
+			var cx = e.clientX - rect.left;
+			var cy = e.clientY - rect.top;
+			var boxSize = document.getElementById("box_size").value;
+			ctxI = document.getElementById("layer0").getContext("2d");
+			//console.log(boxSize, cx + x* boxSize, cy + y * boxSize,boxSize * 16,boxSize * 16);
+			var dat = ctxI.getImageData(cx, cy,boxSize * 16,boxSize * 16).data;
+			document.getElementById("image_data").innerHTML = "";
+			var total =""
+			for(var x = 0;x < 16;x++)
+			{
+				for(var y = 0; y < 16;y++)
+				{
+					
+					var ravg = 0.0;
+					var gavg = 0.0;
+					var bavg = 0.0;
+					for(var i = 0;i < boxSize;i++)
+					{
+						for(var j = 0;j < boxSize;j++)
+						{
+							ravg += dat[((x  + y * boxSize*16)  * boxSize + i + j * boxSize * 16)* 4];
+							gavg += dat[((x  + y * boxSize*16)  * boxSize + i + j * boxSize * 16)* 4 + 1];
+							bavg += dat[((x  + y * boxSize*16)  * boxSize + i + j * boxSize * 16)* 4 + 2];
+							
+						}
+					}
+					ravg/= 1/255*(boxSize * 16) * (boxSize * 16);
+					gavg/= 1/255*(boxSize * 16) * (boxSize * 16);
+					bavg/= 1/255*(boxSize * 16) * (boxSize * 16);
+					ravg = Math.round(ravg);
+					gavg= Math.round(gavg);
+					bavg = Math.round(bavg);
+					dcan = document.getElementById("dbg_can");
+					dctx = dcan.getContext("2d");
+					dctx.fillStyle = rgbToHex(ravg,gavg,bavg);
+					dctx.fillRect(16*x,16*y,16,16);
+					console.log(ravg,gavg,bavg);
+
+					total+= rgbToHex(ravg,gavg,bavg).substring(1);
+
+					//var node = document.createElement("INPUT");
+					
+					//node.name = componentToHex(x + 16 * y);
+					//node.value = rgbToHex(ravg,gavg,bavg).substring(1);
+					//document.getElementById("image_data").appendChild(node);
+				}
+			}
+			var node = document.createElement("INPUT");
+					
+					node.name = "data"
+					node.value = total;
+					document.getElementById("image_data").appendChild(node);
+
+
+		
+		}
+		document.getElementById("layer1").addEventListener("mousemove",imageMove);
+		document.getElementById("layer1").addEventListener("mousedown",imageClick);
+		navA = document.getElementsByClassName("nav-button");
+		for(var i =  navA.length - 1;i >= 0;i--)
+		{
+			navA[i].addEventListener("click",navClick);
+			navA[i].click();
+		}
+		document.getElementById("color_possible").addEventListener("change",colorUpdate);
+		document.getElementById("image_upload").addEventListener("change",imageUpload)
+		var e = {};
+		e.srcElement = document.getElementById("color_possible");
+		colorUpdate(e)
+	</script>
+</body>
