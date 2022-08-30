@@ -1,0 +1,2 @@
+idf_component_register(SRCS "main.c" "bar_render.c" "fft.c" "math_extra.c" "processing_fft_default.c" "sampling.c" "strip_sixteen_render.c" "website_controller.c" 
+                    INCLUDE_DIRS ".")
